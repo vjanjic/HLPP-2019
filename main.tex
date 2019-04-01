@@ -473,14 +473,47 @@ Variables which are declared outside the loop are captured in the lambda
 expressions \emph{by reference}, which means that the lambdas can modify
 them: this may lead to race conditions.
 
-For example, given the loop
+For example, the loop
 % 
 \begin{lstlisting}
-for (int i=0; i < SIZE; i++) {
-  #pragma grppi seq stage
-  xs[i]
+for (int i = 0; i < NUM_ELEM; i++) {
+    #pragma grppi seq stage
+    xs[i] = s1(xs[i]);
+    #pragma grppi farm stage 4
+    xs[i] = s2(xs[i]);
 }
 \end{lstlisting}
+
+\noindent
+is transformed into
+% 
+\begin{lstlisting}
+int i = 0;
+parallel_execution_native pipe { };
+
+pipeline(pipe,
+// -------- source ---------- //
+    [&]() {
+    	if (i < NUM_ELEM) {
+    		auto _r = i;
+    		i++;
+    		return std::experimental::optional<int>(_r);
+    	} else return std::experimental::optional<int>();
+    },
+    // -------- stage 1 ---------- //
+    [&](int i) {
+    	xs[i] = s1(xs[i]);
+    	return i;
+    },
+    // -------- stage 2 ---------- //
+    farm(4, [&](int i) {
+    	xs[i] = s2(xs[i]);
+    	return;
+    }));
+\end{lstlisting}
+
+\noindent
+Here, the refactoring transfr
 
 \subsection{Safety checking}\label{safety-checking}
 
@@ -751,11 +784,13 @@ Similar to our approach, Dig \textit{et al.}~\cite{dig} use refactoring to intro
 \begin{figure}[t]
 \centering
 \subfigure[OpenMP] {
-\includegraphics[width=0.35\textwidth]{GrPPIExampleOpenMP.png}
- \label{fig:grppiExampleOpenMP}}
+\vspace{-6cm}
+\includegraphics[width=0.35\textwidth,angle=270]{figures/MatMult-Seq.pdf}
+ \label{fig:matMultSeq}
+ }
  \subfigure[Intel TBB] {
-\includegraphics[width=0.30\textwidth]{GrPPIExampleTBB.png}
- \label{fig:grppiExampleTBB} 
+\includegraphics[width=0.45\textwidth]{figures/MatMult-Pthreads.pdf}
+ \label{fig:matMultPthreads} 
   }
 \caption{Sequential and \emph{pthreads} parallel Matrix Multiplication versions.}
 \label{fig:baselineMatMult}
