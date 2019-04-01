@@ -332,7 +332,7 @@ In this section we introduce new refactorings implemented in the ParaFormance to
 
 This refactoring converts a C++
 \texttt{for} loop into a GrPPI pipeline containing one or more stages
-which are executed concurrently to process a sequence of data items
+that are executed concurrently to process a sequence of data items
 indexed by the loops. We currently support sequential stages that
 process a single data item at a time, and farm stages that process
 multiple items in parallel. 
@@ -365,37 +365,57 @@ multiple items in parallel.
 
 \subsection{Refactoring strategy}\label{refactoring-strategy}
 
-To refactor a \texttt{for} loop, the loop must be of one of the forms,
+To refactor a \texttt{for} loop, the loop must be in the form,
 % 
-\begin{itemize}
+% \begin{enumerate}
 %\tightlist
-\item
-  \lstinline[mathescape]|for (T x=e1; e2; e3) {$\dots$}|
-\item
-  \lstinline[mathescape]|for (x=e1; e2; e3) {$\dots$}|
-\end{itemize}
+% \item
+\begin{lstlisting}[mathescape]
+for (T x=e1; e2; e3) {$\dots$}
+\end{lstlisting}
 
+% \item
+%   \lstinline[mathescape]|for (x=e1; e2; e3) {$\dots$}|
+% \end{enumerate}
 \noindent
 % Here \texttt{x} is a variable name and \texttt{T} is a type.
-for some variable, \texttt{x}, and type \texttt{T}.
+for some variable, \texttt{x}, and type \texttt{T}, where \texttt{T} may be omitted.
 As is standard,
 \texttt{e1} is an initial value for \texttt{x}, \texttt{e2} is some
 bounding condition, and \texttt{e3} is an expression that updates the
-value of \texttt{x}. \texttt{e2} may be empty, in which case the
-pipeline will run forever, but \texttt{e3} must not be empty. The
+value of \texttt{x}. When \texttt{e2} is empty, the
+pipeline will run forever. The refactoring requires that \texttt{e3} must not be empty. The
 % crucial restriction here is that the 
 loop must declare or initialise a
-single variable in the initialiser; this variable then represents data
+single variable in the initialiser; this variable represents data
 items passing through the pipeline.
+% 
+These patterns enable the refactoring of common types of loop; e.g.
+% \begin{itemize}
+% \item \lstinline[mathescape]|
+\begin{lstlisting}[mathescape]
+for (int i=0; i<N; ++i) {
+  $\dots$
+}
+\end{lstlisting}
 
-These patterns allow us to refactor a number of common types of loop; e.g.
-\begin{itemize}
-\item \lstinline[mathescape]|for (int i=0; i<N; ++i) {$\dots$}|, and
-\item \lstinline|for(auto i = v.begin(); i != v.end; ++i) ...}.
-\end{itemize}
+\noindent
+and
+\begin{lstlisting}[mathescape]
+for (auto i = v.begin(); i != v.end; ++i) {
+  $\dots$
+}
+\end{lstlisting}
 
+\begin{figure}
+\centering
+\includegraphics[width=4in]{figures/InputForm.png}
+\caption{Input Form for ParaFormance GrPPI Refactorings}
+\label{fig:inputform}
+\end{figure}
 
-The refactoring requires that the body of the \texttt{for} loop is a compound statement enclosed in braces; i.e.\ \texttt{\{\dots\}}; and is dependent upon the existence of pragmas in the loop body that indicate the pipeline stages. These pragmas may be introduced manually by the programmer, or automatically via some tool.
+\noindent
+The refactoring requires that the body of the \texttt{for} loop is a compound statement enclosed in braces; i.e.\ \texttt{\{\dots\}}; and is dependent upon the existence of pragmas in the loop body that indicate the pipeline stages. These pragmas may be introduced manually by the programmer, or automatically via some tool, which we intend to investigate as part of future work.
 % The refactoring 
 % Prior to refactoring, the user must manually insert pragmas into the
 % body of the loop indicating the pipeline stages (we expect this process to be automated in future work).
@@ -411,8 +431,9 @@ These pragmas include:
   \lstinline[mathescape]|#pragma grppi farm stage $n$|
 \end{itemize}
 
+\noindent
 A GrPPI farm stage must specify a number of threads to execute the farm.
-By default this is 4, but the pragma can provide an alternative value, $n$, where $n$ is a literal integer or variable name.
+By default this is 4, but the pragma can provide an alternative value, $n$, where $n$ is a literal integer or variable name bound to a literal integer.
 % , which will be used in the
 % refactored code.
 % This will usually be a literal integer or a variable
@@ -431,16 +452,11 @@ iterations of the loop concurrently.
 % \textit{ParaFormance} menu. A form appears allowing the user to
 % enter a name for the pipeline and select the parallelism model (see Figure~\ref{fig:inputform}, shown for Eclipse).
 
-\begin{figure}
-\centering
-\includegraphics[width=4in]{figures/InputForm.png}
-\caption{Input Form for ParaFormance GrPPI Refactorings}
-\label{fig:inputform}
-\end{figure}
+
 
 Once invoked, the refactoring requires the programmer to provide: a name for the pattern to be inserted; the model of parallelism, e.g.\ pthreads or TBB; and any additional headers for other modes. This is provided via a form in Eclipse (Figure~\ref{fig:inputform}).
-
-The refactoring procedure creates a GrPPI \texttt{pipeline} object and
+% 
+The refactoring procedure creates a GrPPI \lstinline|pipeline| object and
 inserts a source object which returns consecutive values for \texttt{x}
 in the form of \texttt{optional} items, with an empty value when there
 are no data items left.
@@ -457,29 +473,42 @@ Variables which are declared outside the loop are captured in the lambda
 expressions \emph{by reference}, which means that the lambdas can modify
 them: this may lead to race conditions.
 
+For example, given the loop
+% 
+\begin{lstlisting}
+for (int i=0; i < SIZE; i++) {
+  #pragma grppi seq stage
+  xs[i]
+}
+\end{lstlisting}
+
 \subsection{Safety checking}\label{safety-checking}
 
-The refactoring carries out some very basic safety checks. If the loop
+The refactoring carries out some simple safety checks. If the loop
 body contains a \texttt{return}, \texttt{break}, \texttt{continue},
 \texttt{goto}, or \texttt{exit} a fatal error will be issued, since
-these statements will either fail to make sense inside the refactored
-code, or could cause an iteration of the loop to terminate when later
+% these statements
+% will either fail to make sense inside the refactored
+% code, or could 
+can cause an iteration of the loop to terminate when later
 iterations have already begun to execute, almost certainly violating the
 intended semantics of the loop. Other problems may arise from the fact that the loop body is broken up
 into several parts with data being passed between them. For example:
-
-\begin{itemize}
-\item
-  If a large data structure is allocated on the stack (more precisely,
+% 
+% \begin{itemize}
+% \item
+  For example, if a large data structure is allocated on the stack (more precisely,
   with automatic storage duration) in one stage and used again in a
   later stage, it will be \emph{copied} as a parameter, which could be
   problematic if the structure is large.
-\item
-  If a pointer is created to a stack-allocated variable in one stage and
+% \item
+  Another example occurs when a pointer is created to a stack-allocated variable in one stage and
   then used in a later stage, the data to which it is pointing may have
   changed, or the memory may be in use for something completely
   unrelated.
-\end{itemize}
+% \end{itemize}
+% 
+These checks are not exhaustive and addressing other potential problems is a topic of future work.
 
 %Ultimately the user must be careful not to introduce race conditions or
 %other concurrency problems. Work is ongoing to detect these problems
@@ -496,36 +525,40 @@ some system over a single timestep), and this dependence makes the loop
 unsuitable for pipelining. However, we have identified a number of
 commonly-occurring patterns which are plausible candidates for
 pipelining and which the tool will refactor.
-
+% 
 \begin{enumerate}
 \def\labelenumi{\arabic{enumi}.}
 %\tightlist
 \item
-  \texttt{while\ (x=e)\ \{\ ...\ \}}
+  \lstinline[mathescape]|while (x=e) {$\dots$}|
 \item
-  \texttt{while\ ((x=e1)\ op\ e2)\ \{\ ...\ \}}
+  \lstinline[mathescape]|while ((x=e1)  op e2) {$\dots$}|
 \item
-  \texttt{while\ (obj\ \textgreater{}\textgreater{}\ x)\ \{\ ...\ \}}
+  \lstinline[mathescape]|while (obj >> x) {$\dots$}|
 \end{enumerate}
 
-\begin{itemize}
-\item In case 1, we assume that \texttt{x} is being given a new value by some
+% \begin{itemize}
+% \item 
+\noindent
+In case 1, we assume that \texttt{x} is being given a new value by some
 expression \texttt{e} which presumably performs some side-effect; for
-example \texttt{while\ (x=*p++)\ ...}.
-
-\item In case 2, we again assume that \texttt{x} is being supplied with new
+example \texttt{while\ (x=*p++)\ ...}. EXAMPLE
+% 
+% \item 
+In case 2, we again assume that \texttt{x} is being supplied with new
 values by \texttt{e1} and the value is being compared with e2 using some
 binary operator \texttt{op}; for example
-\texttt{while\ ((x=getc(stream))\ \textgreater{}=\ 0)\ ...}
-
-\item In case 3, we assume that the \texttt{\textgreater{}\textgreater{}}
+\texttt{while\ ((x=getc(stream))\ \textgreater{}=\ 0)\ ...} EXAMPLE
+% 
+% \item 
+In case 3, we assume that the \texttt{\textgreater{}\textgreater{}}
 operator is supplying new values from a stream or some other type of
 object. This allows us to handle common idioms such as
-\texttt{while\ (std::cin\ \textgreater{}\textgreater{}\ x)\ ...}.
-\end{itemize}
+\texttt{while\ (std::cin\ \textgreater{}\textgreater{}\ x)\ ...}. EXAMPLE
+% \end{itemize}
 
-As before, suitable pragmas should be inserted in the loop body and then
-\textit{Introduce\ GrPPI\ Pipeline} selected.
+% As before, suitable pragmas should be inserted in the loop body and then
+% \textit{Introduce\ GrPPI\ Pipeline} selected.
 %
 %We emphasise that this feature is experimental and should be used with
 %care: it is quite possible that problems may arise which we have not
@@ -714,6 +747,20 @@ Similar to our approach, Dig \textit{et al.}~\cite{dig} use refactoring to intro
 
 \subsection{Matrix Multiplication}
 \noindent Matrix multiplication is one of the most commonly used simple parallel benchmark that demonstrates the use of \emph{farm} pattern. Here, our baseline hand-tuned parallel version multiplies two $n \times n$ matrices by assigning a separate thread to multiplying each row of the first matrix with the complete second matrix. This is more coarse-grained version of the standard benchmark where a separate thread is assigned to multiplication of each row of the first matrix with each colum of the second matrix. The relevant parts of the sequential and hand-tuned parallel versions are given in Figure~\ref{fig:baselineMatMult}
+
+\begin{figure}[t]
+\centering
+\subfigure[OpenMP] {
+\includegraphics[width=0.35\textwidth]{GrPPIExampleOpenMP.png}
+ \label{fig:grppiExampleOpenMP}}
+ \subfigure[Intel TBB] {
+\includegraphics[width=0.30\textwidth]{GrPPIExampleTBB.png}
+ \label{fig:grppiExampleTBB} 
+  }
+\caption{Sequential and \emph{pthreads} parallel Matrix Multiplication versions.}
+\label{fig:baselineMatMult}
+\end{figure}
+
 
 
 
