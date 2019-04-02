@@ -460,19 +460,10 @@ The refactoring procedure creates a GrPPI \lstinline|pipeline| object and
 inserts a source object which returns consecutive values for \texttt{x}
 in the form of \texttt{optional} items, with an empty value when there
 are no data items left.
-%
+% 
 The pipeline stages in the loop body are converted into a sequence of
-lambda expressions following the source. If a variable is declared
-inside a loop stage but required in a later stage, it will be returned
-from the corresponding lambda and passed as an argument to the following
-lambda: if there is more than one such variable then they will be
-returned packed into a tuple which will then be unpacked into variables
-in the next stage.
-%
-Variables which are declared outside the loop are captured in the lambda
-expressions \emph{by reference}, which means that the lambdas can modify
-them: this may lead to race conditions.
-
+lambda expressions following the source.
+% 
 For example, the loop
 % 
 \begin{lstlisting}
@@ -483,9 +474,9 @@ for (int i = 0; i < NUM_ELEM; i++) {
     xs[i] = s2(xs[i]);
 }
 \end{lstlisting}
-
+% 
 \noindent
-is transformed into
+which iterates over the array \texttt{xs}, applying the composition of \texttt{s1} and \texttt{s2}, is transformed into
 % 
 \begin{lstlisting}
 int i = 0;
@@ -511,9 +502,17 @@ pipeline(pipe,
     	return;
     }));
 \end{lstlisting}
-
-\noindent
-Here, the refactoring transfr
+%
+If a variable is declared
+inside a loop stage but required in a later stage, it will be returned
+from the corresponding lambda and passed as an argument to the following
+lambda: if there is more than one such variable then they will be
+returned packed into a tuple which will then be unpacked into variables
+in the next stage.
+%
+Variables which are declared outside the loop are captured in the lambda
+expressions \emph{by reference}, which means that the lambdas can modify
+them: this may lead to race conditions.
 
 \subsection{Safety checking}\label{safety-checking}
 
@@ -575,19 +574,64 @@ pipelining and which the tool will refactor.
 \noindent
 In case 1, we assume that \texttt{x} is being given a new value by some
 expression \texttt{e} which presumably performs some side-effect; for
-example \texttt{while\ (x=*p++)\ ...}. EXAMPLE
+example \texttt{while\ (x=*p++)\ ...}. For example,
+\begin{lstlisting}
+EXAMPLE
+\end{lstlisting}
 % 
 % \item 
 In case 2, we again assume that \texttt{x} is being supplied with new
 values by \texttt{e1} and the value is being compared with e2 using some
 binary operator \texttt{op}; for example
-\texttt{while\ ((x=getc(stream))\ \textgreater{}=\ 0)\ ...} EXAMPLE
+\texttt{while\ ((x=getc(stream))\ \textgreater{}=\ 0)\ ...} For example,
+\begin{lstlisting}
+EXAMPLE
+\end{lstlisting}
 % 
 % \item 
 In case 3, we assume that the \texttt{\textgreater{}\textgreater{}}
 operator is supplying new values from a stream or some other type of
 object. This allows us to handle common idioms such as
-\texttt{while\ (std::cin\ \textgreater{}\textgreater{}\ x)\ ...}. EXAMPLE
+\begin{lstlisting}[mathescape]
+while (std::cin >> x) {
+    $\dots$
+}
+\end{lstlisting}
+For example, the simple \texttt{while} loop,
+\begin{lstlisting}
+while (std::cin >> x) {
+    #pragma grppi farm stage 4
+    xs.push_back(w(acc, x));
+    #pragma grppi seq stage
+    cout << xs.pop_front() << endl;
+}
+\end{lstlisting}
+% 
+\noindent
+is transformed into
+% 
+\begin{lstlisting}
+parallel_execution_native pipe { };
+
+pipeline(pipe,
+	// -------- source ---------- //
+	[&] () {
+		std::cin >> x;
+		if (std::cin)
+		return std::experimental::optional<int>(x);
+		else return std::experimental::optional<int>();
+	},
+	// -------- stage 1 ---------- //
+	farm(4, [&](int x) {
+		acc = w(acc, x);
+		return;
+	}),
+	// -------- stage 2 ---------- //
+	[&]() {
+		cout << acc << endl;
+		return;
+	});
+\end{lstlisting}
 % \end{itemize}
 
 % As before, suitable pragmas should be inserted in the loop body and then
