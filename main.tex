@@ -822,23 +822,155 @@ Similar to our approach, Dig \textit{et al.}~\cite{dig} use refactoring to intro
 
 \section{Evaluation}
 
+\noindent
+In this section, we present an evaluation of the refactorings to introduce GrPPI patterns into sequential code. We consider five benchmarks: Matrix Multiplication, Blackscholes, Ant Colony Optimisation, Image Convolution and Fluid Animation. Characteristics of these applications are given in Table~\ref{table:XX}. For each benchmark, we start from a sequential and hand-tuned parallel version, taken either from the Parsec benchmark suite (for Blackscholes and Fluid Animation) or produced manually. In the sequential version, we introduce, using refactorings described in XX, GrPPI patterns, using interfaces to \emph{pthreads} (native) and TBB. We then compare the speedups obtained with the refactored versions with the speedups of the hand-tuned parallel version. All of our experiments are conducted on a server with Intel Xeon E5-2690 CPU with 28 cores, running at 2.6 Ghz with 256 GB of RAM. The operating system is Scientific Linux 6.2.
+
+
 \subsection{Matrix Multiplication}
-\noindent Matrix multiplication is one of the most commonly used simple parallel benchmark that demonstrates the use of \emph{farm} pattern. Here, our baseline hand-tuned parallel version multiplies two $n \times n$ matrices by assigning a separate thread to multiplying each row of the first matrix with the complete second matrix. This is more coarse-grained version of the standard benchmark where a separate thread is assigned to multiplication of each row of the first matrix with each colum of the second matrix. The relevant parts of the sequential and hand-tuned parallel versions are given in Figure~\ref{fig:baselineMatMult}
+
+\noindent Matrix multiplication is one of the most commonly used simple parallel benchmarks that demonstrates the use of the \emph{farm} pattern. Listing~\ref{lst:matmult_seq} shows the sequential version of the benchmark that multiplies matrix $a$ with matrix $b$ and stores the result in $res$.
+
+\begin{small}
+  \begin{lstlisting}[caption=Sequential Matrix Multiplication\label{lst:matmult_seq}]
+double multiply_row_by_column (double **mat1, int row, double **mat2, int col)
+{
+  int k;
+  double sum=0;
+  for (k=0; k<dim; k++)
+    sum += mat1[row][k] * mat2[k][col];
+
+  return sum;
+}
+
+
+void multiply_row_by_matrix (double **mat1, int row, double **mat2, double **res)
+{
+  for (int col=0; col<dim; col++)
+    res[row][col] = multiply_row_by_column (mat1, row, mat2, col);
+
+}
+
+void matrix_multiply()
+{
+  for (int i = 0; i < dim; i++) {
+    multiply_row_by_matrix(a, i, b, res);
+  }
+}
+  \end{lstlisting}
+  
+\end{small}
+
+\noindent
+We can parallelise this version by assigning a separate task/thread to each call to the \lstinline{multiply_row_by_column} function, as these calls are completely independent of each other. This would, however, create a $n \times n$ tasks/threads for multiplying two $n \times n$ matrices, making the parallelisation too fine-grained (and, indeed, infeasible if the \emph{pthreads} library is used for parallelisation). Therefore, both in our hand-tuned baseline parallelisation using \emph{pthreads} and in the GrPPI version, we parallelise only the loop in \lstinline{matrix_multiply}, assigning separate tasks for each call to the \lstinline{multiply_row_by_matrix} function. In the baseline version, shown in XX, we further use \emph{chunking} to increase granluarity, grouping multiple calls to the function into a single thread, so that we have exactly as many threads as there are, for example, cores on the multicore machine, and each of them executes a series of calls to the \lstinline{multiply_row_by_matrix} function.
+
+\begin{small}
+  \begin{lstlisting}[caption=Baseline (\emph{pthreads}) Parallel Matrix Multiplication\label{lst:matmult_pthreads}]
+// This is chunked multiply_row_by_matrix function    
+static void * thread_func (void* arg)
+{
+  input_data *input = (input_data *)arg;
+  for (int i = input->start; i < input->end; i++) {
+    multiply_row_by_matrix(a, i, b, res);
+  }
+
+  return (void *)0;
+}
+
+
+void matrix_multiply()
+{
+  pthread_attr_t attr;
+  int status;
+
+  in = (input_data *) malloc (sizeof(input_data) * n_threads);
+  threads = (pthread_t *) malloc (sizeof(pthread_t) * n_threads);
+
+  status = pthread_attr_init(&attr);
+  if (status != 0)
+    exit(1);
+
+  int chunk_size = dim / thread_count;
+  int count = 0;
+
+  for (int t_ind = 0; t_ind < n_threads; t_ind++) {
+    in[t_ind].start = count;
+    in[t_ind].end = count + chunk;
+    count += chunk;
+
+    status = pthread_create(&threads[t_ind],
+                            &attr, &thread_func, &in[t_ind]);
+    if (status != 0)
+      exit(1);
+  }
+}
+  \end{lstlisting}  
+\end{small}
+
+Listing~\ref{lst:matmult_grppi} shows the GrPPI version of the application, obtained automatically using the GrPPI refactorings. The code below is for the native (\emph{pthreads}) parallelisation based on GrPPI but, as explained in Section XX, to derive the OpenMP or TBB version, we would just need to replace the \lstinline{parallel_execution_native} with \lstinline{parallel_execution_openmp} or \lstinline{parallel_execution_tbb}, respectivelly. This version also assigns a separate task to each call to the \lstinline{multiply_row_by_matrix} function, but it also does implicit chunking by specifying explicitly the number of workers (threads) in the farm at line 17.
+
+
+\begin{small}
+  \begin{lstlisting}[caption=GrPPI Matrix Multiplication\label{lst:matmult_grppi}]
+void matrix_multiply()
+{
+  int x[dim];
+  int i = 0;
+  parallel_execution_native pipe { };
+
+  pipeline(pipe,
+    // -------- source ---------- //
+    [&]() {
+      if (i < dim) {
+        auto _r = i;
+        i++;
+        return std::experimental::optional<int>(_r);
+      } else return std::experimental::optional<int>();
+    },
+    // -------- stage 1 ---------- //
+    farm(n_workers, [&](int i) {
+      x[i] = multiply_row_by_matrix(a, i, b, res);
+      return;
+    }));
+}
+  \end{lstlisting}  
+\end{small}
 
 \begin{figure}[t]
-\centering
-\subfigure[OpenMP] {
-\vspace{-6cm}
-\includegraphics[width=0.35\textwidth]{figures/MatMult-Seq.pdf}
- \label{fig:matMultSeq}
- }
- \subfigure[Intel TBB] {
-\includegraphics[width=0.45\textwidth]{figures/MatMult-Pthreads.pdf}
- \label{fig:matMultPthreads} 
-  }
-\caption{Sequential and \emph{pthreads} parallel Matrix Multiplication versions.}
-\label{fig:baselineMatMult}
+  \centering
+\begin{tikzpicture}[thick,scale=0.8]
+\begin{axis}[
+  mark size=0.6mm,
+  cycle list={
+    {blue,mark=star},
+    {red,mark=diamond},
+    {brown!60!black,mark=triangle},
+    {blue,dashed,mark=star},
+    {red,dashed,mark=diamond},
+    {brown!60!black,dashed,mark=triangle},
+  },
+  legend style={
+    font=\small,
+    cells={anchor=west},
+  },
+  legend pos= north west,
+  enlargelimits,
+  xtick={2,4,6,8,10,12,14,16,18,20,22,24,26},
+   ytick={0,4,8,12,16,20,24,28},
+   ymax=28,
+   xlabel=Number of Workers (threads),
+   ylabel=Speedup,
+   title=Speedups for Matrix Multiplication
+   ]
+   \addplot table[x index=0,y index=1] {results/matmult_corryvreckan};
+   \addplot table[x index=0,y index=2] {results/matmult_corryvreckan};
+   \legend{Baseline, GrPPI Native}
+   \label{fig:matmult_results}
+ \end{axis} 
+ \end{tikzpicture}
+%\label{fig:matmult_results}
+%\caption{Speedup results for Matrix Multiplication}
 \end{figure}
+
 
 
 
