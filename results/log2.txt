@@ -1,0 +1,240 @@
+20 1
+Runtime is 131.93
+20 1
+Runtime is 131.417
+20 1
+Runtime is 131.088
+20 1
+Runtime is 132.423
+20 1
+Runtime is 133.987
+20 2
+Runtime is 66.6697
+20 2
+Runtime is 66.6495
+20 2
+Runtime is 66.3615
+20 2
+Runtime is 66.9021
+20 2
+Runtime is 66.4872
+20 4
+Runtime is 33.9452
+20 4
+Runtime is 33.9562
+20 4
+Runtime is 34.1311
+20 4
+Runtime is 33.8689
+20 4
+Runtime is 33.9208
+20 6
+Runtime is 23.1068
+20 6
+Runtime is 23.1459
+20 6
+Runtime is 23.0231
+20 6
+Runtime is 23.0897
+20 6
+Runtime is 23.0828
+20 8
+Runtime is 17.7725
+20 8
+Runtime is 17.7326
+20 8
+Runtime is 17.7441
+20 8
+Runtime is 17.6802
+20 8
+Runtime is 17.6971
+20 10
+Runtime is 13.939
+20 10
+Runtime is 13.9917
+20 10
+Runtime is 14.1223
+20 10
+Runtime is 13.9429
+20 10
+Runtime is 13.9104
+20 12
+Runtime is 12.4639
+20 12
+Runtime is 12.355
+20 12
+Runtime is 12.4147
+20 12
+Runtime is 12.3164
+20 12
+Runtime is 12.3509
+20 14
+Runtime is 10.9713
+20 14
+Runtime is 10.91
+20 14
+Runtime is 11.033
+20 14
+Runtime is 10.958
+20 14
+Runtime is 10.9409
+20 16
+Runtime is 9.72599
+20 16
+Runtime is 9.82218
+20 16
+Runtime is 9.68286
+20 16
+Runtime is 9.73164
+20 16
+Runtime is 9.69378
+20 18
+Runtime is 8.62585
+20 18
+Runtime is 8.499
+20 18
+Runtime is 8.48829
+20 18
+Runtime is 8.51603
+20 18
+Runtime is 8.54173
+20 20
+Runtime is 7.38082
+20 20
+Runtime is 7.39561
+20 20
+Runtime is 7.3083
+20 20
+Runtime is 7.41232
+20 20
+Runtime is 7.41506
+20 22
+Runtime is 7.31546
+20 22
+Runtime is 7.18553
+20 22
+Runtime is 7.32257
+20 22
+Runtime is 7.19527
+20 22
+Runtime is 7.19695
+22 1
+Runtime is 134.136
+22 1
+Runtime is 128.264
+22 1
+Runtime is 128.045
+22 1
+Runtime is 131.33
+22 1
+Runtime is 131.413
+22 2
+Runtime is 67.0127
+22 2
+Runtime is 66.6626
+22 2
+Runtime is 66.7211
+22 2
+Runtime is 66.5914
+22 2
+Runtime is 66.7618
+22 4
+Runtime is 33.8746
+22 4
+Runtime is 33.8237
+22 4
+Runtime is 33.9284
+22 4
+Runtime is 33.8841
+22 4
+Runtime is 33.9883
+22 6
+Runtime is 23.1395
+22 6
+Runtime is 23.1375
+22 6
+Runtime is 23.0984
+22 6
+Runtime is 23.1604
+22 6
+Runtime is 23.1302
+22 8
+Runtime is 17.7016
+22 8
+Runtime is 17.7167
+22 8
+Runtime is 17.7386
+22 8
+Runtime is 17.6805
+22 8
+Runtime is 17.9938
+22 10
+Runtime is 13.9964
+22 10
+Runtime is 14.0558
+22 10
+Runtime is 13.9616
+22 10
+Runtime is 14.0087
+22 10
+Runtime is 14.1572
+22 12
+Runtime is 12.4165
+22 12
+Runtime is 12.4319
+22 12
+Runtime is 12.5369
+22 12
+Runtime is 12.3646
+22 12
+Runtime is 12.4577
+22 14
+Runtime is 10.9397
+22 14
+Runtime is 11.0383
+22 14
+Runtime is 10.959
+22 14
+Runtime is 10.9531
+22 14
+Runtime is 10.9743
+22 16
+Runtime is 9.68324
+22 16
+Runtime is 9.659
+22 16
+Runtime is 9.71132
+22 16
+Runtime is 9.73968
+22 16
+Runtime is 9.65375
+22 18
+Runtime is 8.63296
+22 18
+Runtime is 8.52489
+22 18
+Runtime is 8.53925
+22 18
+Runtime is 8.53873
+22 18
+Runtime is 8.50882
+22 20
+Runtime is 7.38443
+22 20
+Runtime is 7.37464
+22 20
+Runtime is 7.3504
+22 20
+Runtime is 7.35562
+22 20
+Runtime is 7.3958
+22 22
+Runtime is 7.16113
+22 22
+Runtime is 7.34274
+22 22
+Runtime is 7.57479
+22 22
+Runtime is 7.24681
+22 22
+Runtime is 7.23378

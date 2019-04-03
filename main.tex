@@ -573,23 +573,58 @@ pipelining and which the tool will refactor.
 % \item 
 \noindent
 In case 1, we assume that \texttt{x} is being given a new value by some
-expression \texttt{e} which presumably performs some side-effect; for
-example \texttt{while\ (x=*p++)\ ...}. For example,
-\begin{lstlisting}
-EXAMPLE
+expression \texttt{e} which presumably performs some side-effect;
+% for example \texttt{while\ (x=*p++)\ ...}.
+For example, the loop,
+% 
+\begin{lstlisting}[mathescape]
+while (x=*p++) {
+    #pragma grppi farm stage 4
+    $\dots$
+}
+\end{lstlisting}
+% 
+\noindent
+is transformed into:
+% 
+\begin{lstlisting}[mathescape]
+parallel_execution_native pipe { };
+
+pipeline(pipe,
+    [&] () {
+    	x=*ptr++;
+    	if (x)
+    	return std::experimental::optional<int>(x);
+    	else return std::experimental::optional<int>();
+    },
+    farm(4, [&](int x) {
+        $\dots$
+    }),
+    $\dots$);
 \end{lstlisting}
 % 
 % \item 
-In case 2, we again assume that \texttt{x} is being supplied with new
-values by \texttt{e1} and the value is being compared with e2 using some
-binary operator \texttt{op}; for example
-\texttt{while\ ((x=getc(stream))\ \textgreater{}=\ 0)\ ...} For example,
-\begin{lstlisting}
-EXAMPLE
+Case 2 extends Case 1, where we again assume that \texttt{x} is being supplied with new
+values by \texttt{e1}, but the value is being compared with e2 using some
+binary operator \texttt{op}. Here, the additional binary operation is reflected in the \texttt{if} within the source lambda of the introduced pipeline. For example, given the condition \lstinline|(x=*ptr++) != NULL| in the \texttt{while} loop, the refactoring generates the source lambda:
+% 
+\begin{lstlisting}[mathescape]
+[&] () {
+	x=*ptr++;
+	if (x != NULL)
+	return std::experimental::optional<int>(x);
+	else return std::experimental::optional<int>();
+},
 \end{lstlisting}
+
+% for example
+% \texttt{while\ ((x=getc(stream))\ \textgreater{}=\ 0)\ ...} For example,
+% \begin{lstlisting}
+% EXAMPLE
+% \end{lstlisting}
 % 
 % \item 
-In case 3, we assume that the \texttt{\textgreater{}\textgreater{}}
+Similarly, in case 3, we assume that the \texttt{>>}
 operator is supplying new values from a stream or some other type of
 object. This allows us to handle common idioms such as
 \begin{lstlisting}[mathescape]
@@ -597,40 +632,30 @@ while (std::cin >> x) {
     $\dots$
 }
 \end{lstlisting}
-For example, the simple \texttt{while} loop,
-\begin{lstlisting}
-while (std::cin >> x) {
-    #pragma grppi farm stage 4
-    xs.push_back(w(acc, x));
-    #pragma grppi seq stage
-    cout << xs.pop_front() << endl;
-}
-\end{lstlisting}
+% For example, the simple \texttt{while} loop,
+% \begin{lstlisting}
+% while (std::cin >> x) {
+%     #pragma grppi farm stage 4
+%     xs.push_back(w(acc, x));
+%     #pragma grppi seq stage
+%     cout << xs.pop_front() << endl;
+% }
+% \end{lstlisting}
 % 
 \noindent
-is transformed into
+which is transformed into
 % 
-\begin{lstlisting}
+\begin{lstlisting}[mathescape]
 parallel_execution_native pipe { };
 
 pipeline(pipe,
-	// -------- source ---------- //
 	[&] () {
 		std::cin >> x;
 		if (std::cin)
 		return std::experimental::optional<int>(x);
 		else return std::experimental::optional<int>();
 	},
-	// -------- stage 1 ---------- //
-	farm(4, [&](int x) {
-		acc = w(acc, x);
-		return;
-	}),
-	// -------- stage 2 ---------- //
-	[&]() {
-		cout << acc << endl;
-		return;
-	});
+	$\dots$);
 \end{lstlisting}
 % \end{itemize}
 
@@ -653,13 +678,15 @@ pipeline(pipe,
 \label{fig:safety1}
 \end{figure}
 
-The safety check is a fundamental feature in the ParaFormance tool. In this check, a static check is carried out to ensure the code being refactored is safe for parallelisation. Validity means the code is free from dependencies, side effects (such as writing to a global state), or contains code that may interfere with the parallel logic.
+The safety check is a fundamental feature in the ParaFormance tool. Here, a static check is carried out to ensure the code being refactored is safe for parallelisation. Validity means the code is free from dependencies, side effects (such as writing to a global state), or contains code that may interfere with the parallel logic.
 %
 The refactorings produced by the ParaFormance tool should preserve the correctness of the functional semantics of the C++ program. This means that when given the same input value(s), the program should produce the same output value(s) before and after a refactoring, up to a given ordering.
 %
 Safety checking does not require the application to be parallelised before proceeding and can run on sequential code. This check ensures a lack of race conditions, deadlocks and other problems that may affect safety. Moreover, this check may introduce additional refactorings to remove/repair these problems. 
 %
-Figure~\ref{fig:safety1} shows the safety checking feature integrated into ParaFormance; here, a report of safety errors are reported to the user, which the tool has found by analysing the source code. The filename, line numbers and a detailed description are given for each safety error reported. In some cases, a suggestion of how to fix the safety issue is also given. Safety checking is able to capture and detect a wide range of cases. These cases include (but are not limited to):
+Figure~\ref{fig:safety1} shows the safety checking feature integrated into ParaFormance; here, a report of safety errors is provided to the programmer, which the tool has found by analysing the source code.
+% The filename, line numbers and a detailed description are given for each safety error reported.
+In some cases, a suggestion of how to fix the safety issue is also given. Safety checking is able to capture and detect a wide range of cases. These cases include, \textit{inter alia}:
 
 \begin{itemize}
 \item \textbf{Race conditions:} Updating global, static, or free variables causes race conditions in threaded code. Such conditions are captured by the checker with context details. Moreover, a stack trace of function calls is provided when the detected conditions are introduced inside invoked function(s).
@@ -1082,6 +1109,106 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
 \caption{Results for refactored versus manual GrPPI implementations of the eRDM use case}
 \end{figure}
 
+\begin{figure}
+\begin{tikzpicture}[thick,scale=0.65]
+\begin{axis}[
+  mark size=0.6mm,
+  cycle list={
+    {blue,mark=star},
+    {red,mark=diamond},
+    {brown!60!black,mark=triangle},
+    {blue,dashed,mark=star},
+    {red,dashed,mark=diamond},
+    {brown!60!black,dashed,mark=triangle},
+  },
+  legend style={
+    font=\small,
+    cells={anchor=west},
+  },
+  legend pos= north west,
+  enlargelimits,
+  xtick={1,2,4,6,8,10,12,14,16},
+   ytick={1,2,4,6,8},
+   ymax=8,
+   xlabel=No. of $\Delta_{2}$ workers,
+   ylabel=Convolution Speedup for $\Delta_{1} || \Delta_{2}$
+  % title=Speedups for Ant Colony
+   ]
+   \addplot table[x index=0,y index=1] {results/convolutionfarm1};
+   \addplot table[x index=0,y index=1] {results/convolutionfarm2};
+   \addplot table[x index=0,y index=1] {results/convolutionfarm4};
+   \addplot table[x index=0,y index=1] {results/convolutionfarm6};
+   \addplot table[x index=0,y index=1] {results/convolutionfarm8};
+   \addplot table[x index=0,y index=1] {results/convolutionfarm10};
+
+   \legend{$\Delta_{1} = 1$, $\Delta_{1} = 2$, $\Delta_{1} = 4$, $\Delta_{1} = 6$, $\Delta_{1} = 8$, $\Delta_{1} = 10$}
+\end{axis} 
+ \end{tikzpicture}
+ \end{figure}
+
+\begin{figure}
+\begin{tikzpicture}[thick,scale=0.65]
+\begin{axis}[
+  mark size=0.6mm,
+  cycle list={
+    {blue,mark=star},
+    {red,mark=diamond},
+    {brown!60!black,mark=triangle},
+    {blue,dashed,mark=star},
+    {red,dashed,mark=diamond},
+    {brown!60!black,dashed,mark=triangle},
+  },
+  legend style={
+    font=\small,
+    cells={anchor=west},
+  },
+  legend pos= north west,
+  enlargelimits,
+  xtick={1,2,4,6,8,10,12,14,16,18,20,22,24,26,28},
+   ytick={1,2,4,6,8,10,12,14},
+   ymax=14,
+   xlabel=No. of farm workers,
+   ylabel=Convolution Speedup
+  % title=Speedups for Ant Colony
+   ]
+   \addplot table[x index=0,y index=1] {results/convofarm1};
+
+   \legend{Farm}
+\end{axis} 
+ \end{tikzpicture}
+ \end{figure}
+ 
+ \begin{figure}
+\begin{tikzpicture}[thick,scale=0.65]
+\begin{axis}[
+  mark size=0.6mm,
+  cycle list={
+    {blue,mark=star},
+    {red,mark=diamond},
+    {brown!60!black,mark=triangle},
+    {blue,dashed,mark=star},
+    {red,dashed,mark=diamond},
+    {brown!60!black,dashed,mark=triangle},
+  },
+  legend style={
+    font=\small,
+    cells={anchor=west},
+  },
+  legend pos= north west,
+  enlargelimits,
+  xtick={1,2,4,6,8,10,12,14,16,18,20,22,24,26,28},
+   ytick={1,2,4,6,8,10,12,14, 16, 18 , 20, 22, 24, 26, 28},
+   ymax=31,
+   xlabel=No. of farm workers,
+   ylabel=Ant Colony Speedup,
+   title=Speedups for Ant Colony
+   ]
+   \addplot table[x index=0,y index=1] {results/ant2000native};
+
+   \legend{Farm}
+\end{axis} 
+ \end{tikzpicture}
+ \end{figure}
 
 %\begin{figure}[!ht]
 %	\centering
