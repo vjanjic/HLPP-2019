@@ -105,10 +105,7 @@ grestore
 
 \author{Christopher Brown         \and
         Vladimir Janjic \and 
-        Kenneth MacKenzie \and
         Adam Barwell \and
-        Imre Pechan \and
-        Javier Garcia-Blas \and
         J. Daniel Garcia
 }
 
@@ -297,7 +294,7 @@ with a text file containing a list of integers.
           else return {};
       },
 
-      Farm(4,
+      farm(4,
          [](int k) {
             return k*k;
          }),
@@ -309,14 +306,14 @@ with a text file containing a list of integers.
 \end{lstlisting}
 }
 
-The two \verb|parallel_execution_ff| declarations introduce GrPPI
-objects which describe the execution model to be used by 
-the parallel pipeline components.  The \verb|ff| part indicates that
-the FastFlow execution model should be used; to use OpenMP (say)
-instead, one would replace these with \verb|parallel_execution_omp|.
+The \verb|parallel_execution_ff| definition introduces a GrPPI
+object which describes the execution model to be used by 
+the parallel pipeline. In this case, the \verb|ff| object is
+used to indicate that the FastFlow execution model should be used; 
+to use OpenMP (say) instead, one would replace this with \verb|parallel_execution_omp|.
 
 The first stage reads integers from the file and feeds them into the pipeline.
-The second stage squares the input items; since it is a \verb|Farm| object,
+The second stage squares the input items; since it is a \verb|farm|,
 multiple items are processed in parallel and the results may not be output
 in the same order as the inputs.
 The final stage prints the squared data items to the standard output stream.
@@ -483,12 +480,13 @@ parallel_execution_native pipe { };
 
 pipeline(pipe,
 // -------- source ---------- //
-    [&]() {
+    [=]() -> std::experimental::optional<int> {
     	if (i < NUM_ELEM) {
     		auto _r = i;
     		i++;
-    		return std::experimental::optional<int>(_r);
-    	} else return std::experimental::optional<int>();
+    		return _r;
+    	} 
+    	else return {};
     },
     // -------- stage 1 ---------- //
     [&](int i) {
@@ -511,7 +509,7 @@ in the next stage.
 %
 Variables which are declared outside the loop are captured in the lambda
 expressions \emph{by reference}, which means that the lambdas can modify
-them: this may lead to race conditions.
+them: this may lead to race conditions. They can also be captured \emph{by value} when no modification is needed. This option improves thread safety.
 
 \subsection{Safety checking}\label{safety-checking}
 
@@ -524,7 +522,7 @@ body contains a \texttt{return}, \texttt{break}, \texttt{continue},
 can cause an iteration of the loop to terminate when later
 iterations have already begun to execute, almost certainly violating the
 intended semantics of the loop. Other problems may arise from the fact that the loop body is broken up
-into several parts with data being passed between them. For example:
+into several parts with data being passed between them. 
 % 
 % \begin{itemize}
 % \item
@@ -590,11 +588,10 @@ is transformed into:
 parallel_execution_native pipe { };
 
 pipeline(pipe,
-    [&] () {
+    [&] () -> std::experimental::optional<int> {
     	x=*ptr++;
-    	if (x)
-    	return std::experimental::optional<int>(x);
-    	else return std::experimental::optional<int>();
+    	if (x) return x;
+    	else return {};
     },
     farm(4, [&](int x) {
         $\dots$
@@ -605,14 +602,13 @@ pipeline(pipe,
 % \item 
 Case 2 extends Case 1, where we again assume that \texttt{x} is being supplied with new
 values by \texttt{e1}, but the value is being compared with e2 using some
-binary operator \texttt{op}. Here, the additional binary operation is reflected in the \texttt{if} within the source lambda of the introduced pipeline. For example, given the condition \lstinline|(x=*ptr++) != NULL| in the \texttt{while} loop, the refactoring generates the source lambda:
+binary operator \texttt{op}. Here, the additional binary operation is reflected in the \texttt{if} within the source lambda of the introduced pipeline. For example, given the condition \lstinline|(x=*ptr++) != nullptr| in the \texttt{while} loop, the refactoring generates the source lambda:
 % 
 \begin{lstlisting}[mathescape]
-[&] () {
+[&] () -> std::experimental::optional<int> {
 	x=*ptr++;
-	if (x != NULL)
-	return std::experimental::optional<int>(x);
-	else return std::experimental::optional<int>();
+	if (x != nullptr) return x;
+	else return {};
 },
 \end{lstlisting}
 
@@ -648,11 +644,10 @@ which is transformed into
 parallel_execution_native pipe { };
 
 pipeline(pipe,
-	[&] () {
+	[&] () -> std::experimental::optional<int> {
 		std::cin >> x;
-		if (std::cin)
-		return std::experimental::optional<int>(x);
-		else return std::experimental::optional<int>();
+		if (std::cin) return x;
+		else return {};
 	},
 	$\dots$);
 \end{lstlisting}
@@ -832,7 +827,9 @@ void fun_call_recursive(){
 
 
 Refactoring has roots in Burstall and Darlington's fold/unfold system~\cite{darlington77}, and has been applied to a wide range of applications as an approach to program transformation~\cite{mens_refactoring}, with refactoring tools a feature of popular IDEs including, \textit{i.a.}, Eclipse~\cite{EclipseWeb} and Visual Studio~\cite{VisualStudioWeb}.
-Previous work on parallelisation \textit{via} refactoring has primarily focussed on the introduction and manipulation of parallel pattern libraries in C++~\cite{brownagricultural,DBLP:conf/pdp/JanjicBMHDAG16} and Erlang~\cite{hlpp,DBLP:journals/cai/BarwellBHTB16}.
+Previous work on parallelisation \textit{via} refactoring has primarily focussed on the introduction and manipulation of parallel pattern libraries in C++~\cite{brownagricultural,DBLP:conf/pdp/JanjicBMHDAG16} and Erlang~\cite{hlpp,DBLP:journals/cai/BarwellBHTB16}. Another approach
+has been the automated introduction of annotations in the form of
+C++ attributes~\cite{rio:2018}.
 
 Parallel design patterns, or algorithmic skeletons, were suggested as solution to the difficulties presented by low-level approaches~\cite{Asanovic:2009:VPC,DBLP:journals/spe/Gonzalez-VelezL10}.
 A range of pattern/skeleton implementations have been developed for a number of programming languages; these include: RPL~\cite{DBLP:conf/pdp/JanjicBMHDAG16}; Feldspar~\cite{DBLP:conf/ifl/AxelssonCSSEP10}; FastFlow~\cite{DBLP:journals/mis/JinLWY15}; Microsoft's Pattern Parallel Library~\cite{ACM:book/msoft/CampbellM11}; and Intel's Threading Building Blocks (TBB) library~\cite{DBLP:reference/parallel/X11pz}.
@@ -980,9 +977,9 @@ void matrix_multiply()
   },
   legend pos= north west,
   enlargelimits,
-  xtick={2,4,6,8,10,12,14,16,18,20,22,24,26},
+  xtick={2,4,6,8,10,12,14,16,18,20,22,24},
    ytick={0,4,8,12,16,20,24,28},
-   ymax=28,
+   ymax=24,
    xlabel=Number of Workers (threads),
    ylabel=Speedup,
    title=Speedups for Matrix Multiplication
@@ -998,249 +995,296 @@ void matrix_multiply()
 \end{figure}
 
 
+\subsection{Image Convolution}
+
+Image convolution is a technique widely used in image processing applications for
+blurring, smoothing and edge detection. We consider an instance of the image
+convolution from video processing applications, where we are given a list of images
+that are first read from a file and then processed by applying 
+a filter. Applying a filter to an image consists of computing a scalar
+product of the filter weights with the input pixels within a window surrounding each of
+the output pixels:
 
 
+\begin{equation}\label{eqn:01}
+\textit{out}(i,j)=\sum_{m}\sum_{n} \textit{in}(i-n,j-m)\times \textit{filt}(n,m)
+\end{equation}
+
+Results for the Image Convolution are shown in figures~\ref{convo0}, \ref{convo1}, and~\ref{convo2}, where figures~\ref{convo0} and~\ref{convo1} shows the speedups obtained from a pipeline implementation of the image convolution. Here, we have two stages of the pipeline, each a farm (denoted as a $\Delta$ in the figures). In Figure~\ref{convo0}, we show results for the refactored GrPPI native pipeline, where each dimension of the graphs shows a varying number of workers for the first pipeline stage ($\Delta_{1}$) and the the x-axis of the graph shows the increasing number of workers for the farm in the second stage ($\Delta_{2}$). Here we obtain speedups of around 13.98 for 2 $\Delta_{1}$ workers and 16 $\Delta_{2}$ workers. Figure~\ref{convo1} shows the refactored GrPPI TBB version, also pipelined in a similar way to Figure~\ref{convo0}. Here, TBB performs better, where we obtain a speedup of 21.23 for 10 $\Delta_{1}$ workers and 16 $\Delta_{2}$ workers. Finally, Figure~\ref{convo2} shows a refactored GrPPI farm version of the convolution, where all the stages are simply executed sequentially by the farm worker. In this case all the versions perform comparably, with speedups of 21.43 for the refactored GrPPI native version and 20.84 for the refactored GrPPI TBB version against 20.847 for the native TBB version.
+
+\subsection{Ant Colony Optimisation}
+
+Ant Colony Optimisation (ACO)~\cite{Dorigo-aco-book} is a metaheuristic used 
+for solving NP-hard combinatorial
+optimisation problems. %, inspired by the behaviour of real ants. 
+In this paper, we apply ACO to the 
+Single Machine Total Weighted Tardiness Problem (SMTWTP) optimisation
+problem, where we are given $n$ jobs
+and each job, $i$, is characterised by its processing time, $p_i$,
+deadline, $d_i$,  and weight,
+$w_i$ (\lstinline{w} in the code below).%\footnoteremark{Miniature fonts again}
+The goal is to find the schedule
+of jobs that minimises the total weighted
+\emph{tardiness}, defined as $\sum w_i \cdot \max \{0, C_i-d_i\}$ 
+where $C_i$ is the
+completion time of the job, $i$.
+The ACO solution to the SMTWTP problem consists of a number of
+iterations, where in each iteration each ant
+independently computes a schedule, and is biased by
+a \emph{pheromone trail} (\lstinline{t} in the code below). 
+The pheromone trail is stronger along previously successful routes and 
+is defined by a matrix $\tau$, where $\tau[i,j]$ is the preference of assigning 
+job $j$ to the $i$-th place in the schedule. 
+After all the ants compute their solutions, the best solution is chosen as
+the ``running best''; the pheromone trail is updated accordingly, and
+the next iteration is started.
+The ant colony optimisation was executed with 2000 jobs and
+with 1000 ants (each ant corresponds to one task).
+Results are shown in Figure~\ref{acresults}.
+With our refactored GrPPI version, we can observe a speedup up to 23.93 for the native GrPPI version with 28 workers and a comparable speedup of 23.90
+with the GrPPI TBB version, also for 28 workers. We compare this to a native TBB version, that doesn't use GrPPI, that gives comparable speedups of 22.89. 
 
 
-\subsection{Railway Diagnostic System}
-
-eRDM is a dynamic railway diagnostic system, supplied by EvoPro Innovations, Hungary. The eRDM is able to measure the load of each wheel, axle and carriage of the train passing over the system at operating speed. The system also provides diagnostic features; it is able to detect unbalanced rail-cars, wheel flat spots, damaged boogies and suspension problems. Thus the system allows real-time freight transportation monitoring, helps increasing railway transportation safety and reducing rail/carriage maintenance costs. The hierarchy of the system can be seen in Figure \ref{fig:erdm_sysoverview}.
-
-\begin{figure}[!ht]
-\centering
-\includegraphics[scale=0.4]{figures/erdm_sysoverview.png}
-\caption{ERDM system hierarchy}
-\label{fig:erdm_sysoverview}
-\end{figure}
-
-\subsubsection{Experimental Setup for eRDM}
-
-The following hardware was used to measure the results for eRDM.
-\begin{itemize}
-	\item Xeon Server (48 CPU-cores, 2816 GPU-cores) with 2x Intel Xeon E5-2695 v2 CPU (x86) (30M Cache, 2.40 GHz) (12 physical cores each, i. e. 48 cores in total by HyperThreading) and 8x16 GB of DDR3 1600 MHz memory.
-	\item Nvidia Jetson TK1 board (4 CPU-cores, 192 GPU-cores) with NVIDIA 4-Plus-1 Quad-Core ARM Cortex-A15 CPU (2.32 GHz), and 2 GB of DDR3L 933MHz memory.
-	\item Gizmo 2 board (2 CPU-cores, 80 GPU-cores), with AMD GX-210HA Dual-Core CPU (x86) (1M Cache, 1 GHz), i. e. 2 cores, and 1GB of DDR3 1600 MHz memory.
-\end{itemize}
-An important modification in the Gizmo 2 hardware is that we replaced the SD card with an SSD to reach higher performance. The SD card used as permanent storage represented a serious performance bottleneck and lead to quite poor performance in D6.4; all the results presented in this deliverable were obtained using the improved configuration.
-
-\subsubsection{Refactoring eRDM}
-
-Apply the GRPPI refactorings from Section~\ref{refactoring_grppi}, the outer loop of the original kernel code was parallelized by applying a pipeline with a farm-based processing stage for the bulk of the code. The generated code did not require any further refinements, it could be directly compiled and executed. Moreover, there was no need to restructure the code manually before transformation, only the pragmas have been inserted as preparation. 
-
-\paragraph{Inserting pragma statements into the original code}
-This preparation step included inserting two pragmas into the original kernel code. These statements inform the ParaFormance plugin as to what type of structure has to be generated from the original source. The relevant code section after inserting pragmas is shown on Listing \ref{code:filtering_with_pragmas}.
-
-\begin{small}
-\begin{lstlisting}[label=code:filtering_with_pragmas,caption={Original eRDM kernel code with pragma statements}]
-unsigned int numOfThreads = 8;
-
-const float* bp_coeffs = RCBProc::bandpass_coefs;
-const float* hil_coeffs = RCBProc::hilbert_coefs;
-unsigned int numOfCoeffs = RCBProc::filterLength;
-
-//filtering
-for (unsigned int rcbIdx = 0; rcbIdx < numberOfRCBs; rcbIdx++) {
-#pragma grppi seq stage
-
-   float* inputSignal = RCBs[rcbIdx].rcbProc.rawData.data();
-   float* filteredSignal = RCBs[rcbIdx].rcbProc.filteredData.data();
-   unsigned int numOfSamples = RCBs[rcbIdx].rcbProc.rawData.size();
-
-#pragma grppi farm stage numOfThreads
-   for (unsigned int sampIdx = 0; sampIdx < numOfSamples; sampIdx++) {
-       filteredSignal[sampIdx] = 0.0f;
-       if (sampIdx >= numOfCoeffs - 1) {
-         float bp_temp = 0.0;
-         float hil_temp = 0.0;
-         for (unsigned int coeffIdx = 0; coeffIdx < numOfCoeffs; coeffIdx++) {
-            bp_temp += bp_coeffs[coeffIdx] * inputSignal[sampIdx - coeffIdx];
-            hil_temp += hil_coeffs[coeffIdx] * inputSignal[sampIdx - coeffIdx];
-         }
-         filteredSignal[sampIdx] = sqrt(bp_temp * bp_temp + hil_temp * hil_temp);
-       }
-   }
-}
-
-
-\end{lstlisting}
-\end{small}
-
-
-\paragraph{Refactoring using ParaFormance and GRPPI}
-After inserting pragmas, we highlighted the outer for loop area then selected the GrPPI option of the ParaFormance menu and clicked \emph{Introduce GrPPI Pipeline}. In the configuration window everything was left default; that is, we used the Native parallelism model similarly to the manual case. Finally the code generation process was launched. The result of it is shown on Listing \ref{code:filtering_generated}.
-
-The generated pipeline consists of two stages. Input of the pipeline is the index of the sensor to be processed. The first stage implements a simple preparation step, it justs sets the input/output data pointers according to the sensor index. The second stage of the pipeline is a farm containing the actual processing code, which thus will be executed in parallel for the different sensors by the specified amount of worker threads.
-
-\begin{small}
-\begin{lstlisting}[label=code:filtering_generated,caption={eRDM refactored using ParaFormance}]
-unsigned int numOfThreads = 8;
-
-const float* bp_coeffs = RCBProc::bandpass_coefs;
-const float* hil_coeffs = RCBProc::hilbert_coefs;
-unsigned int numOfCoeffs = RCBProc::filterLength;
-
-//BENCHMARK START
-double startTime = Utils::getTimeSec();
-
-unsigned int rcbIdx = 0;
-parallel_execution_native pipe { };
-
-//filtering
-pipeline(pipe,
-// -------- source ---------- //
-    [&]() {
-       if (rcbIdx < numberOfRCBs) {
-          auto _r = rcbIdx;
-          rcbIdx++;
-          return std::experimental::optional<unsigned int>(_r);
-          } else return std::experimental::optional<unsigned int>();
-     },
-     // -------- stage 1 ---------- //
-     [&](unsigned int rcbIdx) {
-        float* inputSignal = RCBs[rcbIdx].rcbProc.rawData.data();
-        float* filteredSignal = RCBs[rcbIdx].rcbProc.filteredData.data();
-        unsigned int numOfSamples = RCBs[rcbIdx].rcbProc.rawData.size();
-        return std::make_tuple(numOfSamples, filteredSignal, inputSignal);
-      },
-      // -------- stage 2 ---------- //
-     farm(numOfThreads,
-     [&](std::tuple<unsigned int, float *, float *> _args) {
-        unsigned int numOfSamples = std::get<0>(_args);
-        float * filteredSignal = std::get<1>(_args);
-        float * inputSignal = std::get<2>(_args);
-        for (unsigned int sampIdx = 0; sampIdx < numOfSamples; sampIdx++) {
-        filteredSignal[sampIdx] = 0.0f;
-           if (sampIdx >= numOfCoeffs - 1) {
-             float bp_temp = 0.0;
-             float hil_temp = 0.0;
-             for (unsigned int coeffIdx = 0; coeffIdx < numOfCoeffs; coeffIdx++) {
-                bp_temp += bp_coeffs[coeffIdx] * inputSignal[sampIdx - coeffIdx];
-                hil_temp += hil_coeffs[coeffIdx] * inputSignal[sampIdx - coeffIdx];
-             }
-             filteredSignal[sampIdx] = sqrt(bp_temp * bp_temp + hil_temp * hil_temp);
-         }
-     }
-     return;
-}));
-
-\end{lstlisting}
-\end{small}
-
-%\subsection{Number of threads in the farm pattern}
+%\subsection{Railway Diagnostic System}
 %
-%In order to get the best execution time on the given hardware platform we performed some experiments with a different number of worker threads applied. Figure \ref{fig:erdm_res_grppi_pipe} shows the execution times of the kernel code for various number of threads, for various train lengths on the Xeon Server. In case of the Xeon Server it seems that applying more than 8 worker threads does not give any real further speedup. However, for the parallel versions described in D6.4 we used 16 workers; therefore we applied 16 as the thread number in D6.6 so that a fair and consistent comparison can be made. The Jetson board has 4 CPU cores, so we specified 4 worker in this case. Following this rule 2 workers were used in case of the double-core Gizmo 2 platform.
+%eRDM is a dynamic railway diagnostic system, supplied by EvoPro Innovations, Hungary. The eRDM is able to measure the load of each wheel, axle and carriage of the train passing over the system at operating speed. The system also provides diagnostic features; it is able to detect unbalanced rail-cars, wheel flat spots, damaged boogies and suspension problems. Thus the system allows real-time freight transportation monitoring, helps increasing railway transportation safety and reducing rail/carriage maintenance costs. The hierarchy of the system can be seen in Figure \ref{fig:erdm_sysoverview}.
 %
-%\begin{figure}[ht]
-%	\centering
-%	\includegraphics[width=0.9\linewidth]{figures/cpu_grppi_farms_server.png}
-%	\caption{GrPPI pipeline with farm using different thread numbers on Xeon Server}
-%	\label{fig:erdm_res_grppi_pipe}
+%\begin{figure}[!ht]
+%\centering
+%\includegraphics[scale=0.4]{figures/erdm_sysoverview.png}
+%\caption{ERDM system hierarchy}
+%\label{fig:erdm_sysoverview}
+%\end{figure}
+%
+%\subsubsection{Experimental Setup for eRDM}
+%
+%The following hardware was used to measure the results for eRDM.
+%\begin{itemize}
+%	\item Xeon Server (48 CPU-cores, 2816 GPU-cores) with 2x Intel Xeon E5-2695 v2 CPU (x86) (30M Cache, 2.40 GHz) (12 physical cores each, i. e. 48 cores in total by HyperThreading) and 8x16 GB of DDR3 1600 MHz memory.
+%	\item Nvidia Jetson TK1 board (4 CPU-cores, 192 GPU-cores) with NVIDIA 4-Plus-1 Quad-Core ARM Cortex-A15 CPU (2.32 GHz), and 2 GB of DDR3L 933MHz memory.
+%	\item Gizmo 2 board (2 CPU-cores, 80 GPU-cores), with AMD GX-210HA Dual-Core CPU (x86) (1M Cache, 1 GHz), i. e. 2 cores, and 1GB of DDR3 1600 MHz memory.
+%\end{itemize}
+%An important modification in the Gizmo 2 hardware is that we replaced the SD card with an SSD to reach higher performance. The SD card used as permanent storage represented a serious performance bottleneck and lead to quite poor performance in D6.4; all the results presented in this deliverable were obtained using the improved configuration.
+%
+%\subsubsection{Refactoring eRDM}
+%
+%Apply the GRPPI refactorings from Section~\ref{refactoring_grppi}, the outer loop of the original kernel code was parallelized by applying a pipeline with a farm-based processing stage for the bulk of the code. The generated code did not require any further refinements, it could be directly compiled and executed. Moreover, there was no need to restructure the code manually before transformation, only the pragmas have been inserted as preparation. 
+%
+%\paragraph{Inserting pragma statements into the original code}
+%This preparation step included inserting two pragmas into the original kernel code. These statements inform the ParaFormance plugin as to what type of structure has to be generated from the original source. The relevant code section after inserting pragmas is shown on Listing \ref{code:filtering_with_pragmas}.
+%
+%\begin{small}
+%\begin{lstlisting}[label=code:filtering_with_pragmas,caption={Original eRDM kernel code with pragma statements}]
+%unsigned int numOfThreads = 8;
+%
+%const float* bp_coeffs = RCBProc::bandpass_coefs;
+%const float* hil_coeffs = RCBProc::hilbert_coefs;
+%unsigned int numOfCoeffs = RCBProc::filterLength;
+%
+%//filtering
+%for (unsigned int rcbIdx = 0; rcbIdx < numberOfRCBs; rcbIdx++) {
+%#pragma grppi seq stage
+%
+%   float* inputSignal = RCBs[rcbIdx].rcbProc.rawData.data();
+%   float* filteredSignal = RCBs[rcbIdx].rcbProc.filteredData.data();
+%   unsigned int numOfSamples = RCBs[rcbIdx].rcbProc.rawData.size();
+%
+%#pragma grppi farm stage numOfThreads
+%   for (unsigned int sampIdx = 0; sampIdx < numOfSamples; sampIdx++) {
+%       filteredSignal[sampIdx] = 0.0f;
+%       if (sampIdx >= numOfCoeffs - 1) {
+%         float bp_temp = 0.0;
+%         float hil_temp = 0.0;
+%         for (unsigned int coeffIdx = 0; coeffIdx < numOfCoeffs; coeffIdx++) {
+%            bp_temp += bp_coeffs[coeffIdx] * inputSignal[sampIdx - coeffIdx];
+%            hil_temp += hil_coeffs[coeffIdx] * inputSignal[sampIdx - coeffIdx];
+%         }
+%         filteredSignal[sampIdx] = sqrt(bp_temp * bp_temp + hil_temp * hil_temp);
+%       }
+%   }
+%}
+%
+%
+%\end{lstlisting}
+%\end{small}
+%
+%
+%\paragraph{Refactoring using ParaFormance and GRPPI}
+%After inserting pragmas, we highlighted the outer for loop area then selected the GrPPI option of the ParaFormance menu and clicked \emph{Introduce GrPPI Pipeline}. In the configuration window everything was left default; that is, we used the Native parallelism model similarly to the manual case. Finally the code generation process was launched. The result of it is shown on Listing \ref{code:filtering_generated}.
+%
+%The generated pipeline consists of two stages. Input of the pipeline is the index of the sensor to be processed. The first stage implements a simple preparation step, it justs sets the input/output data pointers according to the sensor index. The second stage of the pipeline is a farm containing the actual processing code, which thus will be executed in parallel for the different sensors by the specified amount of worker threads.
+%
+%\begin{small}
+%\begin{lstlisting}[label=code:filtering_generated,caption={eRDM refactored using ParaFormance}]
+%unsigned int numOfThreads = 8;
+%
+%const float* bp_coeffs = RCBProc::bandpass_coefs;
+%const float* hil_coeffs = RCBProc::hilbert_coefs;
+%unsigned int numOfCoeffs = RCBProc::filterLength;
+%
+%//BENCHMARK START
+%double startTime = Utils::getTimeSec();
+%
+%unsigned int rcbIdx = 0;
+%parallel_execution_native pipe { };
+%
+%//filtering
+%pipeline(pipe,
+%// -------- source ---------- //
+%    [&]() {
+%       if (rcbIdx < numberOfRCBs) {
+%          auto _r = rcbIdx;
+%          rcbIdx++;
+%          return std::experimental::optional<unsigned int>(_r);
+%          } else return std::experimental::optional<unsigned int>();
+%     },
+%     // -------- stage 1 ---------- //
+%     [&](unsigned int rcbIdx) {
+%        float* inputSignal = RCBs[rcbIdx].rcbProc.rawData.data();
+%        float* filteredSignal = RCBs[rcbIdx].rcbProc.filteredData.data();
+%        unsigned int numOfSamples = RCBs[rcbIdx].rcbProc.rawData.size();
+%        return std::make_tuple(numOfSamples, filteredSignal, inputSignal);
+%      },
+%      // -------- stage 2 ---------- //
+%     farm(numOfThreads,
+%     [&](std::tuple<unsigned int, float *, float *> _args) {
+%        unsigned int numOfSamples = std::get<0>(_args);
+%        float * filteredSignal = std::get<1>(_args);
+%        float * inputSignal = std::get<2>(_args);
+%        for (unsigned int sampIdx = 0; sampIdx < numOfSamples; sampIdx++) {
+%        filteredSignal[sampIdx] = 0.0f;
+%           if (sampIdx >= numOfCoeffs - 1) {
+%             float bp_temp = 0.0;
+%             float hil_temp = 0.0;
+%             for (unsigned int coeffIdx = 0; coeffIdx < numOfCoeffs; coeffIdx++) {
+%                bp_temp += bp_coeffs[coeffIdx] * inputSignal[sampIdx - coeffIdx];
+%                hil_temp += hil_coeffs[coeffIdx] * inputSignal[sampIdx - coeffIdx];
+%             }
+%             filteredSignal[sampIdx] = sqrt(bp_temp * bp_temp + hil_temp * hil_temp);
+%         }
+%     }
+%     return;
+%}));
+%
+%\end{lstlisting}
+%\end{small}
+%
+%%\subsection{Number of threads in the farm pattern}
+%%
+%%In order to get the best execution time on the given hardware platform we performed some experiments with a different number of worker threads applied. Figure \ref{fig:erdm_res_grppi_pipe} shows the execution times of the kernel code for various number of threads, for various train lengths on the Xeon Server. In case of the Xeon Server it seems that applying more than 8 worker threads does not give any real further speedup. However, for the parallel versions described in D6.4 we used 16 workers; therefore we applied 16 as the thread number in D6.6 so that a fair and consistent comparison can be made. The Jetson board has 4 CPU cores, so we specified 4 worker in this case. Following this rule 2 workers were used in case of the double-core Gizmo 2 platform.
+%%
+%%\begin{figure}[ht]
+%%	\centering
+%%	\includegraphics[width=0.9\linewidth]{figures/cpu_grppi_farms_server.png}
+%%	\caption{GrPPI pipeline with farm using different thread numbers on Xeon Server}
+%%	\label{fig:erdm_res_grppi_pipe}
+%%\end{figure}
+%
+%\subsubsection{Measurement results}
+%
+%Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on the Xeon Server. Similarly, these results are presented in figures \ref{fig:erdm_res_grppi_pipe_jetson} and \ref{fig:erdm_res_grppi_pipe_gizmo2}. On the Xeon Server an average speedup of x6.07 could be obtained with the automatically generated GrPPI pipeline code over the sequential one, with a maximal speedup of x7.26 for the 102 axle train. In case of the Jetson board the average speedup was x3.45. The Gizmo 2 platform reached averagely x1.98 faster execution in case of the pipeline-based solution compared to the sequential version. In contrast to the map-based solution the achieved speedup highly depends on the input data size (number of axles) in this case, especially on the Xeon Server, where the speedup was only x4.29 for a 4 axle train. 
+%\begin{figure}[t]
+%\centering
+%\subfigure[GrPPI Pipeline with Farm results of Xeon Server for eRDM] {
+%\begin{tikzpicture}[thick,scale=0.65]
+%\begin{axis}[
+%  mark size=0.6mm,
+%  cycle list={
+%    {blue,mark=star},
+%    {red,mark=diamond},
+%    {brown!60!black,mark=triangle},
+%    {blue,dashed,mark=star},
+%    {red,dashed,mark=diamond},
+%    {brown!60!black,dashed,mark=triangle},
+%  },
+%  legend style={
+%    font=\small,
+%    cells={anchor=west},
+%  },
+%  legend pos= north west,
+%  enlargelimits,
+%  xtick={4,16,30,50,102},
+%   ytick={0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5},
+%   ymax=5,
+%   xlabel=Train Axle Number (pieces),
+%   ylabel=Convolution Execution Time (sec),
+%  % title=Speedups for Ant Colony
+%   ]
+%   \addplot table[x index=0,y index=1] {results/cpu_meas.txt};
+%   \addplot table[x index=0,y index=1] {results/grppi_meas_results.txt};
+%   \legend{Manual GrPPI, Refactored GrPPI}
+%\end{axis} 
+% \end{tikzpicture}
+% \label{fig:erdm_res_grppi_pipe_xeon}}
+% \subfigure[GrPPI pipeline with farm results on Jetson board for eRDM] {
+%\begin{tikzpicture}[thick,scale=0.65]
+%\begin{axis}[
+%  mark size=0.6mm,
+%  cycle list={
+%    {blue,mark=star},
+%    {red,mark=diamond},
+%    {brown!60!black,mark=triangle},
+%    {blue,dashed,mark=star},
+%    {red,dashed,mark=diamond},
+%    {brown!60!black,dashed,mark=triangle},
+%  },
+%  legend style={
+%    font=\small,
+%    cells={anchor=west},
+%  },
+%  legend pos= north west,
+%  enlargelimits,
+%  xtick={4,16,30,50,102},
+%   ytick={0, 1,2,3,4,5,6,7,8},
+%   ymax=8,
+%   xlabel=Train Axle Number (pieces),
+%   ylabel=Convolution Execution Time (sec),
+%  % title=Speedups for Ant Colony
+%   ]
+%   \addplot table[x index=0,y index=1] {results/cpu_meas_jetson.txt};
+%   \addplot table[x index=0,y index=1] {results/grppi_meas_results_jetson.txt};
+%   \legend{Manual GrPPI, Refactored GrPPI}
+%\end{axis} 
+% \end{tikzpicture}
+% \label{fig:erdm_res_grppi_pipe_jetson}}
+%  \subfigure[GrPPI pipeline with farm results on Gizmo 2 board for eRDM] {
+%\begin{tikzpicture}[thick,scale=0.65]
+%\begin{axis}[
+%  mark size=0.6mm,
+%  cycle list={
+%    {blue,mark=star},
+%    {red,mark=diamond},
+%    {brown!60!black,mark=triangle},
+%    {blue,dashed,mark=star},
+%    {red,dashed,mark=diamond},
+%    {brown!60!black,dashed,mark=triangle},
+%  },
+%  legend style={
+%    font=\small,
+%    cells={anchor=west},
+%  },
+%  legend pos= north west,
+%  enlargelimits,
+%  xtick={4,16,30,50,102},
+%   ytick={0, 5, 10, 15, 20, 25},
+%   ymax=25,
+%   xlabel=Train Axle Number (pieces),
+%   ylabel=Convolution Execution Time (sec),
+%  % title=Speedups for Ant Colony
+%   ]
+%   \addplot table[x index=0,y index=1] {results/cpu_meas_gizmo.txt};
+%   \addplot table[x index=0,y index=1] {results/grppi_meas_results_gizmo.txt};
+%   \legend{Manual GrPPI, Refactored GrPPI}
+%\end{axis} 
+% \end{tikzpicture}
+%\label{fig:erdm_res_grppi_pipe_gizmo2}}
+%
+%
+%\caption{Results for refactored versus manual GrPPI implementations of the eRDM use case}
 %\end{figure}
 
-\subsubsection{Measurement results}
-
-Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on the Xeon Server. Similarly, these results are presented in figures \ref{fig:erdm_res_grppi_pipe_jetson} and \ref{fig:erdm_res_grppi_pipe_gizmo2}. On the Xeon Server an average speedup of x6.07 could be obtained with the automatically generated GrPPI pipeline code over the sequential one, with a maximal speedup of x7.26 for the 102 axle train. In case of the Jetson board the average speedup was x3.45. The Gizmo 2 platform reached averagely x1.98 faster execution in case of the pipeline-based solution compared to the sequential version. In contrast to the map-based solution the achieved speedup highly depends on the input data size (number of axles) in this case, especially on the Xeon Server, where the speedup was only x4.29 for a 4 axle train. 
-\begin{figure}[t]
-\centering
-\subfigure[GrPPI Pipeline with Farm results of Xeon Server for eRDM] {
-\begin{tikzpicture}[thick,scale=0.65]
-\begin{axis}[
-  mark size=0.6mm,
-  cycle list={
-    {blue,mark=star},
-    {red,mark=diamond},
-    {brown!60!black,mark=triangle},
-    {blue,dashed,mark=star},
-    {red,dashed,mark=diamond},
-    {brown!60!black,dashed,mark=triangle},
-  },
-  legend style={
-    font=\small,
-    cells={anchor=west},
-  },
-  legend pos= north west,
-  enlargelimits,
-  xtick={4,16,30,50,102},
-   ytick={0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5},
-   ymax=5,
-   xlabel=Train Axle Number (pieces),
-   ylabel=Convolution Execution Time (sec),
-  % title=Speedups for Ant Colony
-   ]
-   \addplot table[x index=0,y index=1] {results/cpu_meas.txt};
-   \addplot table[x index=0,y index=1] {results/grppi_meas_results.txt};
-   \legend{Manual GrPPI, Refactored GrPPI}
-\end{axis} 
- \end{tikzpicture}
- \label{fig:erdm_res_grppi_pipe_xeon}}
- \subfigure[GrPPI pipeline with farm results on Jetson board for eRDM] {
-\begin{tikzpicture}[thick,scale=0.65]
-\begin{axis}[
-  mark size=0.6mm,
-  cycle list={
-    {blue,mark=star},
-    {red,mark=diamond},
-    {brown!60!black,mark=triangle},
-    {blue,dashed,mark=star},
-    {red,dashed,mark=diamond},
-    {brown!60!black,dashed,mark=triangle},
-  },
-  legend style={
-    font=\small,
-    cells={anchor=west},
-  },
-  legend pos= north west,
-  enlargelimits,
-  xtick={4,16,30,50,102},
-   ytick={0, 1,2,3,4,5,6,7,8},
-   ymax=8,
-   xlabel=Train Axle Number (pieces),
-   ylabel=Convolution Execution Time (sec),
-  % title=Speedups for Ant Colony
-   ]
-   \addplot table[x index=0,y index=1] {results/cpu_meas_jetson.txt};
-   \addplot table[x index=0,y index=1] {results/grppi_meas_results_jetson.txt};
-   \legend{Manual GrPPI, Refactored GrPPI}
-\end{axis} 
- \end{tikzpicture}
- \label{fig:erdm_res_grppi_pipe_jetson}}
-  \subfigure[GrPPI pipeline with farm results on Gizmo 2 board for eRDM] {
-\begin{tikzpicture}[thick,scale=0.65]
-\begin{axis}[
-  mark size=0.6mm,
-  cycle list={
-    {blue,mark=star},
-    {red,mark=diamond},
-    {brown!60!black,mark=triangle},
-    {blue,dashed,mark=star},
-    {red,dashed,mark=diamond},
-    {brown!60!black,dashed,mark=triangle},
-  },
-  legend style={
-    font=\small,
-    cells={anchor=west},
-  },
-  legend pos= north west,
-  enlargelimits,
-  xtick={4,16,30,50,102},
-   ytick={0, 5, 10, 15, 20, 25},
-   ymax=25,
-   xlabel=Train Axle Number (pieces),
-   ylabel=Convolution Execution Time (sec),
-  % title=Speedups for Ant Colony
-   ]
-   \addplot table[x index=0,y index=1] {results/cpu_meas_gizmo.txt};
-   \addplot table[x index=0,y index=1] {results/grppi_meas_results_gizmo.txt};
-   \legend{Manual GrPPI, Refactored GrPPI}
-\end{axis} 
- \end{tikzpicture}
-\label{fig:erdm_res_grppi_pipe_gizmo2}}
-
-
-\caption{Results for refactored versus manual GrPPI implementations of the eRDM use case}
-\end{figure}
-
 \begin{figure}
+\subfigure[Image Convolution with GrPPI Native pipeline] {
 \begin{tikzpicture}[thick,scale=0.65]
 \begin{axis}[
   mark size=0.6mm,
@@ -1259,8 +1303,8 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
   legend pos= north west,
   enlargelimits,
   xtick={1,2,4,6,8,10,12,14,16},
-   ytick={1,2,4,6,8},
-   ymax=8,
+   ytick={1,2,4,6,8,10,12,14,16},
+   ymax=16,
    xlabel=No. of $\Delta_{2}$ workers,
    ylabel=Convolution Speedup for $\Delta_{1} || \Delta_{2}$
   % title=Speedups for Ant Colony
@@ -1272,15 +1316,10 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
    \addplot table[x index=0,y index=1] {results/convolutionfarm8};
    \addplot table[x index=0,y index=1] {results/convolutionfarm10};
    
-
-
-
    \legend{$\Delta_{1} = 1$, $\Delta_{1} = 2$, $\Delta_{1} = 4$, $\Delta_{1} = 6$, $\Delta_{1} = 8$, $\Delta_{1} = 10$}
 \end{axis} 
- \end{tikzpicture}
- \end{figure}
-
-\begin{figure}
+ \end{tikzpicture} \label{convo0}}
+ \subfigure[Speedups for Image Convolution with GrPPI TBB Pipeline] {
 	\begin{tikzpicture}[thick,scale=0.65]
 	\begin{axis}[
 	mark size=0.6mm,
@@ -1299,11 +1338,11 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
 	legend pos= north west,
 	enlargelimits,
 	xtick={1,2,4,6,8,10,12,14,16},
-	ytick={1,2,4,6,8,10},
-	ymax=10,
+	ytick={1,2,4,6,8,10,12,14,16,18,20,22},
+	ymax=22,
 	xlabel=No. of $\Delta_{2}$ workers,
 	ylabel=Convolution Speedup for $\Delta_{1} || \Delta_{2}$,
-     title=Speedups for Image Convolution with GrPPI TBB Pipeline
+    % title=Speedups for Image Convolution with GrPPI TBB Pipeline
 	]
    \addplot table[x index=0,y index=1] {results/convopipetbbgrppi};
 \addplot table[x index=0,y index=2] {results/convopipetbbgrppi};
@@ -1311,18 +1350,15 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
 \addplot table[x index=0,y index=4] {results/convopipetbbgrppi};
 \addplot table[x index=0,y index=5] {results/convopipetbbgrppi};
 \addplot table[x index=0,y index=6] {results/convopipetbbgrppi};
-	
-	
-	
-	
 	\legend{$\Delta_{1} = 1$, $\Delta_{1} = 2$, $\Delta_{1} = 4$, $\Delta_{1} = 6$, $\Delta_{1} = 8$, $\Delta_{1} = 10$}
 	\end{axis} 
-	\end{tikzpicture}
+	\end{tikzpicture} \label{convo1}}
 \end{figure}
 
 
 
 \begin{figure}
+\subfigure[Speedups for Image Convolution GrPPI Farm] {
 \begin{tikzpicture}[thick,scale=0.65]
 \begin{axis}[
   mark size=0.6mm,
@@ -1341,21 +1377,20 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
   legend pos= north west,
   enlargelimits,
   xtick={1,2,4,6,8,10,12,14,16,18,20,22,24,26,28},
-   ytick={1,2,4,6,8,10,12,14},
-   ymax=14,
+   ytick={1,2,4,6,8,10,12,14,16,18,20,22},
+   ymax=22,
    xlabel=No. of farm workers,
    ylabel=Convolution Speedup,
-   title=Speedups for Image Convolution GrPPI Farm
+ %  title=Speedups for Image Convolution GrPPI Farm
    ]
    \addplot table[x index=0,y index=1] {results/convofarm1};
+   \addplot table[x index=0,y index=1] {results/convogrppitbb};
     \addplot table[x index=0,y index=1] {results/convotbbnative};
 
-   \legend{GrPPI PThreads, GrPPI TBB}
+   \legend{GrPPI PThreads, GrPPI TBB, Native TBB}
 \end{axis} 
- \end{tikzpicture}
- \end{figure}
- 
- \begin{figure}
+ \end{tikzpicture}\label{convo2}}
+  \subfigure[Speedups for Ant Colony] {
 \begin{tikzpicture}[thick,scale=0.65]
 \begin{axis}[
   mark size=0.6mm,
@@ -1374,18 +1409,20 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
   legend pos= north west,
   enlargelimits,
   xtick={1,2,4,6,8,10,12,14,16,18,20,22,24,26,28},
-   ytick={1,2,4,6,8,10,12,14, 16, 18 , 20, 22, 24, 26, 28},
-   ymax=31,
+   ytick={1,2,4,6,8,10,12,14, 16, 18 , 20, 22, 24, 26},
+   ymax=26,
    xlabel=No. of farm workers,
    ylabel=Ant Colony Speedup,
-   title=Speedups for Ant Colony GrPPI
+%   title=Speedups for Ant Colony
    ]
    \addplot table[x index=0,y index=1] {results/ant2000native};
    \addplot table[x index=0,y index=1] {results/antgrrpitbb};
+   \addplot table[x index=0,y index=1] {results/ant200tbbnative};
 
-   \legend{Native, TBB}
+   \legend{GrPPI Pthreads, GrPPI TBB, TBB}
 \end{axis} 
  \end{tikzpicture}
+ \label{acresults}}
  \end{figure}
 
 %\begin{figure}[!ht]
@@ -1414,6 +1451,13 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
 
 
 \section{Conclusions and Future Work}
+In this paper, we presented new refactorings for C++ that transform sequential code into fully parallel equivalent implementations, using the GrPPI framework. These refactorings are implemented in the ParaFormance tool. Tagetting GrPPI allows the programmer to refactor their sequential C++ code into one parallel version that targets many different backends, such as PThreads, TBB and OpenMP, without having to be a domain expert in parallel programming, or have expertise or knowledge in any of the available parallel libraries.  Furthermore, our experiments show that our refactorings are comparable to hand-tuned native versions using TBB and PThreads.
+
+As future work, we plan to extend our refactorings and safety checking techniques further, to support additional patterns, such as stencil, divide and conquer and reduce. We also plan to evaluate the refactorings on larger use-cases.
+
+%\noindent \small{\textbf{Acknowledgements} This work has been partially supported by EU FP7-ICT-2013-10 project
+%	REPARA (No. 609666) and EU H2020-ICT-2014-1 project RePhrase
+%	(No. 644235).}
 
 
 
