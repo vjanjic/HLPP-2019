@@ -107,7 +107,9 @@ grestore
         Vladimir Janjic \and 
         Kenneth MacKenzie \and
         Adam Barwell \and
-        Imre Pechan
+        Imre Pechan \and
+        Javier Garcia-Blas \and
+        J. Daniel Garcia
 }
 
 %\authorrunning{Short form of author list} % if too long for running head
@@ -194,7 +196,7 @@ The specific research contributions of this paper are:
 \emph{Parallel patterns} are a high-level abstraction for representing classes of computations that are similar in terms of their parallel structure, but different in terms of problem-specific operations. A typical example of a parallel pattern is a \emph{parallel map}, where the same operation is applied to a set of independent inputs in parallel. Regardless of whether the actual operation is, for example, multiplying a matrix by a vector or processing a pixel of an image, the parallel structure of the computation will be the same. Parallel Patterns are typically implemented as library functions, which handle creation, synchronisation and communication between the parallel threads, while the problem-specific (often sequential) computations are provided as the pattern parameters. In this paper, we restrict ourselves to two classical parallel patterns, which we believe to be the most common. Note that the technique described in this paper can be further generalised to include the full tractable set of parallel patterns.
 \begin{itemize}
     \item The farm pattern models a data parallel computation, where a single computational worker, $f$, is applied to a set of independent inputs, $x_{1}, ..., x_{n}$. The parallelism arises from applying the worker, $f$, to different input elements at the same time in parallel. 
-    \item The pipeline pattern models a parallel pipeline. Here, a sequence of functions, $f_{1}, f_{2}, ..., f_{m}$ are applied, to a stream on independent inputs, $x_{1}, ..., x_{n}$. The output of $f_{i}$ becomes the input to $f_{i+1}$, so that the parallelism arises from executing $f_{i+1}(f_{i}(...f_{1}(x_{k})...))$ in parallel with $f_{i}(f_{i-1}(...f_{1}(x_{k+1})...))$.
+    \item The pipeline pattern models a parallel pipeline. Here, a sequence of functions, $f_{1}, f_{2}, ..., f_{m}$ are applied, to a stream on independent inputs, $x_{1}, ..., x_{n}$. The output of $f_{i}$ becomes the input to $f_{i+1}$, so that the parallelism arises from executing $f_{i+1}(f_{i}(...f_{1}(x_{k})...))$ in parallel with $f_{i}(f_{i-1}(...f_{1}(x_{k+1})...))$. In this case the parallelism arises from executing different stages $f_{i}$ in parallel while items progress through the pipeline.
 \end{itemize}
 
 %The benefits of using parallel patterns lie in clear separation between sequential and parallel parts of the code and high-level description of the underlying parallelism, which makes the patterned applications much easier to maintain, change and adapt to new architectures. For these reasons, they have been endorsed by most of the top IT companies, who have their own pattern libraries, such as Microsoft PPL~\cite{ppl} and Intel Thread Building Blocks~\cite{tbb}. In addition to that, there are also many popular open-source pattern libraries, such as OpenMP~\cite{openmp} and FastFlow~\cite{openmp}.
@@ -211,7 +213,7 @@ productivity and code reuse. The term refactoring was first introduced by Opdyke
 %
 %\subsection{ParaFormance}
 
-ParaFormance (\url{http://www.paraformance.com}) is a refactoring tool-suite developed at the University of St Andrews that refactors C and C++ programs into parallel versions. It targets a number of different back-ends, including FastFlow, Intel Thread Building Blocks (TBB), OpenMP and GRPPI. It has a number of unique features and is integrated as a plugin into both Eclipse and Microsoft Visual Studio, presenting a menu of various options to its users. ParaFormance provides \emph{semi-automated refactorings} to introduce parallel patterns into sequential code; \emph{safety checking} features to find, statically, parallelism related bugs, such as race-conditions, deadlocks and memory collisions; and \emph{pattern discovery}, to find the hotspots in the program that are suitable for parallelism. All refactorings applied to source code in ParaFormance are fully undoable. Furthermore, all operations in ParaFormance come with a full preview feature, enabling users to see the result of the transformation before applying it. Figure~\ref{fig:paraformance1} gives a screenshot of the ParaFormance tool integrated into Visual Studio. The refactorings presented in the this paper are implemented in ParaFormance as a plugin for both Visual Studio and Eclipse.
+ParaFormance (\url{http://www.paraformance.com}) is a refactoring tool-suite developed at the University of St Andrews that refactors C and C++ programs into parallel versions. It targets a number of different back-ends, including FastFlow, Intel Thread Building Blocks (TBB), OpenMP and GrPPI. It has a number of unique features and is integrated as a plugin into both Eclipse and Microsoft Visual Studio, presenting a menu of various options to its users. ParaFormance provides \emph{semi-automated refactorings} to introduce parallel patterns into sequential code; \emph{safety checking} features to find, statically, parallelism related bugs, such as race-conditions, deadlocks and memory collisions; and \emph{pattern discovery}, to find the hotspots in the program that are suitable for parallelism. All refactorings applied to source code in ParaFormance are fully undoable. Furthermore, all operations in ParaFormance come with a full preview feature, enabling users to see the result of the transformation before applying it. Figure~\ref{fig:paraformance1} gives a screenshot of the ParaFormance tool integrated into Visual Studio. The refactorings presented in the this paper are implemented in ParaFormance as a plugin for both Visual Studio and Eclipse.
 
 \begin{figure}
     \centering
@@ -225,9 +227,7 @@ ParaFormance (\url{http://www.paraformance.com}) is a refactoring tool-suite dev
 GrPPI\cite{D24,DBLP:journals/concurrency/AstorgaD0G17} is a parallel pattern interface
 which uses C++ template metaprogramming to provide implementations of
 a number of parallel patterns.  The GrPPI patterns are generic over a
-number of different parallelism models, currently including (at least
-partial) support for Posix threads (PThreads), OpenMP, Intel's Thread Building Blocks (TBB), FastFlow, and
-CUDA Thrust.  This enables users to write their application without
+number of different parallelism models, currently including support for ISO C++ Threads, OpenMP, Intel's Thread Building Blocks (TBB), and FastFlow.  This enables users to write their application without
 needing to know the details of a particular model, and to easily
 switch between models.  This strategy greatly reduces the load on the programmer.
 
@@ -246,7 +246,7 @@ There are various types of
 intermediate stage, some of which may themselves be carrying out
 parallel computations internally.  Pipeline stages are represented by C++
 lambda expressions, or by GrPPI constructs containing lambda expressions,
-and are supplied as arguments to the GrPPI \texttt{Pipeline} template.
+and are supplied as arguments to the GrPPI \texttt{pipeline} template.
 
 \begin{figure}[!ht]
 \includegraphics[width=12cm]{figures/pipeline.pdf}
@@ -276,7 +276,7 @@ For example, a sink might write an item to a file, or store it in an array or ve
 \item Sequential stages, containing purely sequential code
 \item Farms, which can process multiple items in parallel
 \item Filters, which can discard items in the input stream based on some predicate
-\item Accumulators, which can amalgamate several stream items into a single item for processing by the next stage
+\item Reducers, which can amalgamate several stream items into a single item for processing by the next stage
 \end{itemize}
 
 Pipeline stages are usually represented by C++ lambda expressions,
@@ -289,21 +289,20 @@ with a text file containing a list of integers.
 {\scriptsize
 \begin{lstlisting}
    parallel_execution_ff p{};
-   parallel_execution_ff f{};
 
-   Pipeline(p,
-      [&]() {
+   pipeline(p,
+      [&]() -> optional<int> {
           int i;
-          if (is >> i) return optional<int>(i);
-          else return optional<int>();
+          if (is >> i) return i;
+          else return {};
       },
 
-      Farm(f,
-         [&](int k) {
+      Farm(4,
+         [](int k) {
             return k*k;
          }),
 
-      [&](int n) {
+      [](int n) {
          cout << n << endl;
       }
    );
@@ -1272,11 +1271,56 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
    \addplot table[x index=0,y index=1] {results/convolutionfarm6};
    \addplot table[x index=0,y index=1] {results/convolutionfarm8};
    \addplot table[x index=0,y index=1] {results/convolutionfarm10};
+   
+
+
 
    \legend{$\Delta_{1} = 1$, $\Delta_{1} = 2$, $\Delta_{1} = 4$, $\Delta_{1} = 6$, $\Delta_{1} = 8$, $\Delta_{1} = 10$}
 \end{axis} 
  \end{tikzpicture}
  \end{figure}
+
+\begin{figure}
+	\begin{tikzpicture}[thick,scale=0.65]
+	\begin{axis}[
+	mark size=0.6mm,
+	cycle list={
+		{blue,mark=star},
+		{red,mark=diamond},
+		{brown!60!black,mark=triangle},
+		{blue,dashed,mark=star},
+		{red,dashed,mark=diamond},
+		{brown!60!black,dashed,mark=triangle},
+	},
+	legend style={
+		font=\small,
+		cells={anchor=west},
+	},
+	legend pos= north west,
+	enlargelimits,
+	xtick={1,2,4,6,8,10,12,14,16},
+	ytick={1,2,4,6,8,10},
+	ymax=10,
+	xlabel=No. of $\Delta_{2}$ workers,
+	ylabel=Convolution Speedup for $\Delta_{1} || \Delta_{2}$,
+     title=Speedups for Image Convolution with GrPPI TBB Pipeline
+	]
+   \addplot table[x index=0,y index=1] {results/convopipetbbgrppi};
+\addplot table[x index=0,y index=2] {results/convopipetbbgrppi};
+\addplot table[x index=0,y index=3] {results/convopipetbbgrppi};
+\addplot table[x index=0,y index=4] {results/convopipetbbgrppi};
+\addplot table[x index=0,y index=5] {results/convopipetbbgrppi};
+\addplot table[x index=0,y index=6] {results/convopipetbbgrppi};
+	
+	
+	
+	
+	\legend{$\Delta_{1} = 1$, $\Delta_{1} = 2$, $\Delta_{1} = 4$, $\Delta_{1} = 6$, $\Delta_{1} = 8$, $\Delta_{1} = 10$}
+	\end{axis} 
+	\end{tikzpicture}
+\end{figure}
+
+
 
 \begin{figure}
 \begin{tikzpicture}[thick,scale=0.65]
@@ -1300,12 +1344,13 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
    ytick={1,2,4,6,8,10,12,14},
    ymax=14,
    xlabel=No. of farm workers,
-   ylabel=Convolution Speedup
-  % title=Speedups for Ant Colony
+   ylabel=Convolution Speedup,
+   title=Speedups for Image Convolution GrPPI Farm
    ]
    \addplot table[x index=0,y index=1] {results/convofarm1};
+    \addplot table[x index=0,y index=1] {results/convotbbnative};
 
-   \legend{Farm}
+   \legend{GrPPI PThreads, GrPPI TBB}
 \end{axis} 
  \end{tikzpicture}
  \end{figure}
@@ -1333,11 +1378,12 @@ Figure \ref{fig:erdm_res_grppi_pipe_xeon} shows the measured execution times on 
    ymax=31,
    xlabel=No. of farm workers,
    ylabel=Ant Colony Speedup,
-   title=Speedups for Ant Colony
+   title=Speedups for Ant Colony GrPPI
    ]
    \addplot table[x index=0,y index=1] {results/ant2000native};
+   \addplot table[x index=0,y index=1] {results/antgrrpitbb};
 
-   \legend{Farm}
+   \legend{Native, TBB}
 \end{axis} 
  \end{tikzpicture}
  \end{figure}
