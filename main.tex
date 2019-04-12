@@ -77,6 +77,7 @@ grestore
 \usepackage{pgfplots}
 \usepackage{xspace}
 \usepackage{subfigure}
+\usepackage{multicol}
 %\usepackage{subcaption}
 
 
@@ -105,39 +106,30 @@ grestore
 
 \author{Christopher Brown         \and
         Vladimir Janjic \and 
-        Adam Barwell \and
+        Adam D. Barwell \and
         J. Daniel Garcia
 }
 
 %\authorrunning{Short form of author list} % if too long for running head
 
 \institute{C. Brown, V. Janjic, A. Barwell \at
-              School of Computer Science \\
-              University of St Andrews \\
-              UK. \\
+              School of Computer Science, University of St Andrews, UK. \\
               \email{cmb21,vj32,adb23@st-andrews.ac.uk}           %  \\
 %             \emph{Present address:} of F. Author  %  if needed
-           \and
-            K. Mackenzie \at
-                IOHK \\
-              \email{thingy...} 
          \and
-                I. Pechan \at
-               EvoPro Innovation \\
-              Hungary. \\
-              \email{Pechan.Imre@evopro.hu}
+                J. D. Garcia \at
+               University Carlos III Madrid, Madrid, Spain.. \\
+              \email{josedaniel.garcia@uc3m.es}
 }
 
 \date{Received: date / Accepted: date}
 % The correct dates will be entered by the editor
 
-
 \maketitle
 
 \begin{abstract}
-Insert your abstract here. Include keywords, PACS and mathematical
-subject classification numbers as needed.
-\keywords{First keyword \and Second keyword \and More}
+Generic Reusable Parallel Pattern Interface (GrPPI) is a very useful abstraction over different parallel pattern libraries, allowing the programmer to write a generic patterned code that can easily be compiled to different backends such as FastFlow, Open MP, Intel TBB and pthreads. However, rewriting code to include calls to GrPPI still involves code transformations that can be highly non-trivial, especially for programmers who are not experts in parallelism. This paper describes \emph{software refactorings} to semi-automatically introduce instances of GrPPI patterns into sequential code, as well as \emph{safety checking} static analysis mechanisms that verify that introducing patterns into the code does not introduce concurrency-related bugs such as race conditions. We demonstrate the refactorings and safety-checking mechanisms on three simple benchmarks, showing that we are able to obtain, with little effort, GrPPI-based parallel versions that accomplish good speedups (similar to those of manually-produced parallel versions) using different pattern backends.
+\keywords{Refactoring \and Parallelism \and Parallel Patterns \and TBB \and C++ \and GrPPI \and pthreads}
 % \PACS{PACS code1 \and PACS code2 \and more}
 % \subclass{MSC code1 \and MSC code2 \and more}
 \end{abstract}
@@ -148,28 +140,62 @@ subject classification numbers as needed.
 \noindent
 The scale of parallelism in modern hardware systems is increasing at a very fast rate, with 72-core systems available off-the-shelf even in the embedded market\footnote{\url{http://www.mellanox.com/page/products_dyn?product_family=238&mtag=tile_gx72}}. At the same time, such systems are becoming increasingly heterogeneous, integrating GPUs, FPGAs, DSLs and other specialised processors within the same chip. This large scale of parallelism and heterogeneity of systems makes programming modern parallel hardware very difficult, often requiring a combination of different (and usually complex) programming models (e.g.~POSIX threads for the central multicore processor and OpenCL for GPUs), coupled with careful manual tuning, to achieve good performance. 
 
-Parallel patterns~\cite{Asanovic:2009:VPC} have been recognised as an excellent compromise between the ease of programming and ability to generate efficient code for large-scale heterogeneous parallel architectures. They have been endorsed by several major IT companies, such as Intel and Microsoft as a means of programming parallel applications. This has given rise to a multitude of parallel pattern libraries, most of which are incompatible with one another and each of which usually has specific advantages (and disadvantages) over the others. GrPPI~\cite{DBLP:journals/concurrency/AstorgaD0G17} represents one of the first attempts at a uniform interface to parallel patterns, based on C++ template programming that allows the generation of target code for different pattern libraries. The code in Figure~\ref{fig:grppiExample} shows a snippet of code for a \emph{farm} pattern that targets both OpenMP and Intel TBB pattern libraries. While GrPPI makes the patterned code much easier to write, and also significantly eases rewriting of the code to use different pattern libraries, transforming sequential code to use GrPPI is still a very non-trivial task. The programmer needs to first ensure that it is \emph{safe} (in terms of unexpected side effects and race conditions) to transform the sequential code into its equivalent parallel implementation, and, secondly, to transform loops of the sequential code into calls to the appropriate patterns. 
+Parallel patterns~\cite{Asanovic:2009:VPC} have been recognised as an excellent compromise between the ease of programming and the ability to generate efficient code for large-scale heterogeneous parallel architectures. They have been endorsed by several major IT companies, such as Intel~\cite{DBLP:reference/parallel/X11pz} and Microsoft~\cite{ACM:book/msoft/CampbellM11}, giving rise to a multitude of parallel pattern libraries, most of which are incompatible with one another and each of which usually has specific advantages (and disadvantages) over the others. GrPPI~\cite{DBLP:journals/concurrency/AstorgaD0G17} represents one of the first attempts at a uniform interface to parallel patterns, based on C++ template programming, that allows the generation of target code for different pattern libraries. Listings~\ref{lst:grppi-omp} and~\ref{lst:grppi-tbb} show code for a \emph{farm} pattern that targets both OpenMP and Intel TBB pattern libraries. While GrPPI makes the patterned code much easier to write, and also significantly eases rewriting of the code to use different pattern libraries, transforming sequential code to use GrPPI is still a very non-trivial task. The programmer needs to first ensure that it is \emph{safe} (in terms of unexpected side effects and race conditions) to transform the sequential code into its equivalent parallel implementation, and, secondly, to transform loops of the sequential code into calls to the appropriate patterns. 
 
-\begin{figure}[t]
-\centering
-\subfigure[OpenMP] {
-\includegraphics[width=0.35\textwidth]{GrPPIExampleOpenMP.png}
- \label{fig:grppiExampleOpenMP}}
- \subfigure[Intel TBB] {
-\includegraphics[width=0.30\textwidth]{GrPPIExampleTBB.png}
- \label{fig:grppiExampleTBB} 
+\begin{table*}
+\noindent\begin{minipage}{.46\columnwidth}
+\begin{lstlisting}[caption={Example targeting OpenMP},label={lst:grppi-omp}]
+parallel_execution_omp omp{};
+
+pipeline(omp,
+  [] -> optional<image> {
+    image im;
+    if (read(im)) return im;
+    else return {};
+  },
+  farm(4,
+    [](const image & im) { 
+      return process_image(im); 
+    }
+  ),
+  [](const image & im) { 
+    write_image(im,file); 
   }
-\caption{Example of the \emph{farm} pattern in GrPPI targetting OpenMP and TBB pattern libraries. Highlighted are parts of the code that differ between the two versions.}
-\label{fig:grppiExample}
-\end{figure}
+);
+\end{lstlisting}
+\end{minipage}
+\noindent\begin{minipage}{.05\columnwidth}\hfill
+\end{minipage}
+\noindent\begin{minipage}{.46\columnwidth}\hfill
+\begin{lstlisting}[caption={Example targeting TBB},label={lst:grppi-tbb}]
+parallel_execution_tbb tbb{};
 
-This paper describes \emph{software refactorings} to introduce GrPPI patterns into the sequential code. These refactorings, implemented in the ParaFormance toolset for developing and maintaining parallel programs, provide a semi-automatic way of transforming sequential C++ code into its parallel patterned counterpart. The programmer is only required to insert simple annotations in the code to denote the parts that are, possibly, amenable to patterned parallelisation. We also describe \emph{safety checking} mechanisms that ensure the parts of the code annotated by the programmer are, indeed, safe to be transformed into patterns. Safety checking is based on s static analysis of the loops in the code to ensure that the loops are free of side effects (or, alternatively, that the side effects can be safely eliminated), that the order in which loop iterations are executed does not change the code semantics, etc. 
+pipeline(tbb,
+  [] -> optional<image> {
+    image im;
+    if (read(im)) return im;
+    else return {};
+  },
+  farm(4,
+    [](const image & im) { 
+      return process_image(im); 
+    }
+  ),
+  [](const image & im) { 
+    write_image(im,file); 
+  }
+);  
+\end{lstlisting}
+\end{minipage}
+\end{table*}
+
+This paper describes \emph{software refactorings} to introduce GrPPI patterns into the sequential code. These refactorings, implemented in the ParaFormance toolset for developing and maintaining parallel programs, provide a semi-automatic way of transforming sequential C++ code into its parallel patterned counterpart. The programmer is only required to insert simple annotations in the code to denote the parts that are, possibly, amenable to patterned parallelisation. We also describe \emph{safety checking} mechanisms that ensure the parts of the code annotated by the programmer are, indeed, safe to be transformed into patterns. Safety checking is based on static analysis of the loops in the code to ensure that: the loops are free of side effects (or, alternatively, that the side effects can be safely eliminated); the order in which loop iterations are executed does not change the code semantics, etc. 
 
 The specific research contributions of this paper are:
 \begin{enumerate}
-    \item we describe novel refactorings to introduce \emph{farm} and \emph{pipeline} parallelism, based on GrPPI interface, into the sequential C++ code, implemented as part of the \emph{ParaFormance} refactoring tool-set;
-    \item we describe static analysis mechanisms that ensure the sequential code is safe for the application of refactorings to introduce patterned parallelism;
-    \item we demonstrate the effectiveness of the refactorings and safety checking mechanisms on a number of benchmarks and real world examples, showing good speedups over the sequential code of the patterned code generated using the refactorings.
+    \item Novel refactorings to introduce \emph{farm} and \emph{pipeline} parallelism, based on GrPPI interface, into sequential C++ code, implemented as part of the \emph{ParaFormance} refactoring tool-set;
+    \item Novel static analysis mechanisms that ensure the sequential code is safe for the refactoring to introduce patterned parallelism;
+    \item Demonstration of the effectiveness of the refactorings and safety checking mechanisms on a number of benchmarks and real world examples, showing good speedups over the sequential code.
 \end{enumerate}
 
 
@@ -203,7 +229,7 @@ The specific research contributions of this paper are:
 \noindent
 \emph{Refactoring} is the process of changing the structure of a program while preserving
 its functional semantics in order, for example, to increase code quality, programming
-productivity and code reuse. The term refactoring was first introduced by Opdyke in his PhD thesis in 1992~\cite{opdyke}, and the concept goes at least as far back as the fold/unfold system proposed by Burstall and Darlington in 1977~\cite{darlington77}. In our case, refactorings are source-to-source transformations of the code that are performed \emph{semi-automatically}, under the programmers guidance and possibly with his input. 
+productivity and code reuse. The term refactoring was first introduced by Opdyke in his PhD thesis in 1992~\cite{opdyke}, and the concept goes at least as far back as the fold/unfold system proposed by Burstall and Darlington in 1977~\cite{darlington77}. In our case, refactorings are source-to-source transformations of the code that are performed \emph{semi-automatically}, under the programmer's guidance, and possibly with their input. 
 
 %
 %
@@ -219,17 +245,17 @@ ParaFormance (\url{http://www.paraformance.com}) is a refactoring tool-suite dev
     \label{fig:paraformance1}
 \end{figure}
 
-\subsection{GRPPI}
+\subsection{GrPPI}
 
-GrPPI\cite{D24,DBLP:journals/concurrency/AstorgaD0G17} is a parallel pattern interface
+GrPPI~\cite{D24,DBLP:journals/concurrency/AstorgaD0G17} is a parallel pattern interface
 which uses C++ template metaprogramming to provide implementations of
 a number of parallel patterns.  The GrPPI patterns are generic over a
-number of different parallelism models, currently including support for ISO C++ Threads, OpenMP, Intel's Thread Building Blocks (TBB), and FastFlow.  This enables users to write their application without
+number of different parallelism models, currently including support for ISO C++ Threads, OpenMP, Intel TBB, and FastFlow.  This enables users to write their application without
 needing to know the details of a particular model, and to easily
 switch between models.  This strategy greatly reduces the load on the programmer.
 
 
-\subsection{Structure of GrPPI patterns}\label{sec:pattern-structure}
+%\subsection{Structure of GrPPI patterns}\label{sec:pattern-structure}
 
 The basic GrPPI model is of a \textit{pipeline} which processes a
 stream of data items: items are produced by a \textit{source},
@@ -238,12 +264,13 @@ processed by some intermediate components, and then disposed of by a
 so that an item can be processed by stage number $n$ at the same time
 as the following item is being processed by stage $n-1$ (and the item
 after that by stage $n-2$, and so on): see Figure~\ref{pipeline1}.  
-
+% 
 There are various types of
 intermediate stage, some of which may themselves be carrying out
-parallel computations internally.  Pipeline stages are represented by C++
-lambda expressions, or by GrPPI constructs containing lambda expressions,
-and are supplied as arguments to the GrPPI \texttt{pipeline} template.
+parallel computations internally:  
+% Pipeline stages are represented by C++
+% lambda expressions, or by GrPPI constructs containing lambda expressions,
+% and are supplied as arguments to the GrPPI \texttt{pipeline} template.
 
 \begin{figure}[!ht]
 \includegraphics[width=12cm]{figures/pipeline.pdf}
@@ -252,11 +279,11 @@ and are supplied as arguments to the GrPPI \texttt{pipeline} template.
 \label{pipeline1}
 \end{figure}
 
-
-\paragraph{Data sources.}  A source produces a stream of items of some type \verb|T|.
+\begin{itemize}
+\item \emph{Data sources.}  A source produces a stream of items of some type \verb|T|.
 The output of the source is in fact of type \verb|optional<T>| so
-that the pipeline can tell when the input stream has come to and
-end.
+that the pipeline can tell when the input stream has
+ended.
 
 %\footnote{See
 %  \url{http://en.cppreference.com/w/cpp/utility/optional} for
@@ -264,71 +291,71 @@ end.
 %  extension for C++17 which is not available in most current C++
 %  compilers; GrPPI provides its own implementation.}.
 
-\paragraph{Data sinks.}
+\item \emph{Data sinks.}
 A sink takes a single item of data and disposes of it in some way, returning \verb|void|.
 For example, a sink might write an item to a file, or store it in an array or vector.
 
-\paragraph{Intermediate stages.} GrPPI provides several types of intermediate stage, including:
+\item \emph{Intermediate stages.} GrPPI provides several types of intermediate stage, including:
 \begin{itemize}
-\item Sequential stages, containing purely sequential code
-\item Farms, which can process multiple items in parallel
-\item Filters, which can discard items in the input stream based on some predicate
-\item Reducers, which can amalgamate several stream items into a single item for processing by the next stage
+\item sequential stages, containing purely sequential code;
+\item farms, which can process multiple items in parallel;
+\item filters, which can discard items in the input stream based on some predicate; and
+\item reducers, which can amalgamate several stream items into a single item for processing by the next stage.
+\end{itemize}
 \end{itemize}
 
+\noindent
 Pipeline stages are usually represented by C++ lambda expressions,
 perhaps wrapped inside GrPPI templates.  A simple example is given
-below: this reads a number of integers from a file, squares each one,
+below that reads a number of integers from a file, squares each one,
 and writes the results to \verb|std::cout|. We assume that the
 variable \verb|is| is of type \verb|istream| and is associated
 with a text file containing a list of integers.
 
 {\scriptsize
 \begin{lstlisting}
-   parallel_execution_ff p{};
+   parallel_execution_native par{};
 
-   pipeline(p,
+   pipeline(par,
       [&]() -> optional<int> {
           int i;
           if (is >> i) return i;
           else return {};
       },
-
       farm(4,
-         [](int k) {
-            return k*k;
-         }),
-
+         [](int k) { return k*k; }
+      ),
       [](int n) {
-         cout << n << endl;
+         cout << n << "\n";
       }
    );
 \end{lstlisting}
 }
 
-The \verb|parallel_execution_ff| definition introduces a GrPPI
-object which describes the execution model to be used by 
-the parallel pipeline. In this case, the \verb|ff| object is
-used to indicate that the FastFlow execution model should be used; 
-to use OpenMP (say) instead, one would replace this with \verb|parallel_execution_omp|.
-
-The first stage reads integers from the file and feeds them into the pipeline.
-The second stage squares the input items; since it is a \verb|farm|,
+\noindent
+The \verb|parallel_execution_native| definition introduces a GrPPI
+object that describes the execution model to be used by 
+the parallel pipeline. In this case, the \verb|native| object is
+used to indicate that the native execution model (pthreads) should be used; 
+to use, e.g., TBB instead, one would replace this with \verb|parallel_execution_tbb|.
+The first stage reads integers from the file and feeds them into the pipeline. The second stage squares the input items; since it is a \verb|farm|,
 multiple items are processed in parallel and the results may not be output
 in the same order as the inputs.
 The final stage prints the squared data items to the standard output stream.
 
 
-\section{Refactorings for GrPPI}
+\section{Refactoring for Introducing a GrPPI Pipeline}
 \label{refactoring_grppi}
 
-In this section we introduce new refactorings implemented in the ParaFormance tool that introduce GrPPI patterns in sequential C++ source code. In this paper we target the \emph{pipeline} and \emph{farm} patterns.
+% In this section we introduce new refactorings implemented in the ParaFormance tool that introduce GrPPI patterns in sequential C++ source code. In this paper we target the \emph{pipeline} and \emph{farm} patterns.
 
-\subsection{Introducing a GrPPI Pipeline}\label{refactoring-interface}
+% \subsection{Introducing a GrPPI Pipeline}\label{refactoring-interface}
 
-This refactoring converts a C++
-\texttt{for} loop into a GrPPI pipeline containing one or more stages
-that are executed concurrently to process a sequence of data items
+We define a refactoring that converts a C++
+\texttt{for} loop into a GrPPI pipeline
+% , containing one or more stages
+% that are executed concurrently 
+to process a sequence of data items
 indexed by the loops. We currently support sequential stages that
 process a single data item at a time, and farm stages that process
 multiple items in parallel. 
@@ -380,8 +407,10 @@ As is standard,
 \texttt{e1} is an initial value for \texttt{x}, \texttt{e2} is some
 bounding condition, and \texttt{e3} is an expression that updates the
 value of \texttt{x}. When \texttt{e2} is empty, the
-pipeline will run forever. The refactoring requires that \texttt{e3} must not be empty. The
+pipeline will run forever. The refactoring requires that \texttt{e3} must not be empty,
+% . The
 % crucial restriction here is that the 
+and that the
 loop must declare or initialise a
 single variable in the initialiser; this variable represents data
 items passing through the pipeline.
@@ -390,28 +419,24 @@ These patterns enable the refactoring of common types of loop; e.g.
 % \begin{itemize}
 % \item \lstinline[mathescape]|
 \begin{lstlisting}[mathescape]
-for (int i=0; i<N; ++i) {
-  $\dots$
-}
+for (int i=0; i<N; ++i) { $\dots$ }
 \end{lstlisting}
 
 \noindent
 and
 \begin{lstlisting}[mathescape]
-for (auto i = v.begin(); i != v.end; ++i) {
-  $\dots$
-}
+for (auto i = v.begin(); i != v.end; ++i) { $\dots$ }
 \end{lstlisting}
 
-\begin{figure}
-\centering
-\includegraphics[width=4in]{figures/InputForm.png}
-\caption{Input Form for ParaFormance GrPPI Refactorings}
-\label{fig:inputform}
-\end{figure}
+% \begin{figure}
+% \centering
+% \includegraphics[width=4in]{figures/InputForm.png}
+% \caption{Input Form for ParaFormance GrPPI Refactorings}
+% \label{fig:inputform}
+% \end{figure}
 
 \noindent
-The refactoring requires that the body of the \texttt{for} loop is a compound statement enclosed in braces; i.e.\ \texttt{\{\dots\}}; and is dependent upon the existence of pragmas in the loop body that indicate the pipeline stages. These pragmas may be introduced manually by the programmer, or automatically via some tool, which we intend to investigate as part of future work.
+The refactoring requires that the body of the \texttt{for} loop is a compound statement enclosed in braces, i.e.\ \texttt{\{\dots\}}, and is dependent upon the existence of pragmas in the loop body that indicate the pipeline stages. These pragmas may be introduced manually by the programmer, or automatically via some tool, which we intend to investigate as part of future work.
 % The refactoring 
 % Prior to refactoring, the user must manually insert pragmas into the
 % body of the loop indicating the pipeline stages (we expect this process to be automated in future work).
@@ -421,15 +446,16 @@ These pragmas include:
 %\tightlist
 \item
   \lstinline|#pragma grppi seq stage|
-\item
-  \lstinline|#pragma grppi farm stage|
+% \item
+%   \lstinline|#pragma grppi farm stage|
 \item
   \lstinline[mathescape]|#pragma grppi farm stage $n$|
 \end{itemize}
 
 \noindent
-A GrPPI farm stage must specify a number of threads to execute the farm.
-By default this is 4, but the pragma can provide an alternative value, $n$, where $n$ is a literal integer or variable name bound to a literal integer.
+A GrPPI farm stage must specify a number of threads to execute the farm, specified by
+% By default this is 4, but the pragma can provide an alternative value, 
+$n$, where $n$ is a literal integer or variable name bound to a literal integer.
 % , which will be used in the
 % refactored code.
 % This will usually be a literal integer or a variable
@@ -438,7 +464,7 @@ By default this is 4, but the pragma can provide an alternative value, $n$, wher
 % check of syntactic validity, so it is up to the user to write something
 % sensible.
 %
-It is possible to create a pipeline which consists of a single
+It is possible to create a pipeline that comprises a single
 farm stage: this is equivalent to running multiple (and possibly all)
 iterations of the loop concurrently.
 
@@ -450,17 +476,18 @@ iterations of the loop concurrently.
 
 
 
-Once invoked, the refactoring requires the programmer to provide: a name for the pattern to be inserted; the model of parallelism, e.g.\ pthreads or TBB; and any additional headers for other modes. This is provided via a form in Eclipse (Figure~\ref{fig:inputform}).
+Once invoked, the refactoring requires the programmer to provide: a name for the pattern to be inserted; the model of parallelism, e.g.\ pthreads or TBB; and any additional headers for other modes. 
+% This is provided via a form in Eclipse (Figure~\ref{fig:inputform}).
 % 
 The refactoring procedure creates a GrPPI \lstinline|pipeline| object and
-inserts a source object which returns consecutive values for \texttt{x}
+inserts a source object that returns consecutive values for \texttt{x}
 in the form of \texttt{optional} items, with an empty value when there
 are no data items left.
 % 
 The pipeline stages in the loop body are converted into a sequence of
 lambda expressions following the source.
 % 
-For example, the loop
+For example, the loop,
 % 
 \begin{lstlisting}
 for (int i = 0; i < NUM_ELEM; i++) {
@@ -475,26 +502,18 @@ for (int i = 0; i < NUM_ELEM; i++) {
 which iterates over the array \texttt{xs}, applying the composition of \texttt{s1} and \texttt{s2}, is transformed into
 % 
 \begin{lstlisting}
-int i = 0;
 parallel_execution_native pipe { };
 
 pipeline(pipe,
-// -------- source ---------- //
-    [=]() -> std::experimental::optional<int> {
-    	if (i < NUM_ELEM) {
-    		auto _r = i;
-    		i++;
-    		return _r;
-    	} 
+    [i=0,max=NUM_ELEM]() mutable -> std::optional<int>  { // source
+    	if (i < max) return i++;
     	else return {};
     },
-    // -------- stage 1 ---------- //
-    [&](int i) {
+    [&](int i) { // stage 1
     	xs[i] = s1(xs[i]);
     	return i;
     },
-    // -------- stage 2 ---------- //
-    farm(4, [&](int i) {
+    farm(4, [&](int i) { // stage 2
     	xs[i] = s2(xs[i]);
     	return;
     }));
@@ -507,11 +526,11 @@ lambda: if there is more than one such variable then they will be
 returned packed into a tuple which will then be unpacked into variables
 in the next stage.
 %
-Variables which are declared outside the loop are captured in the lambda
+Variables that are declared outside the loop are captured in the lambda
 expressions \emph{by reference}, which means that the lambdas can modify
-them: this may lead to race conditions. They can also be captured \emph{by value} when no modification is needed. This option improves thread safety.
+them. This may lead to race conditions. They can also be captured \emph{by value} when no modification is needed. This option improves thread safety.
 
-\subsection{Safety checking}\label{safety-checking}
+\subsection{Pipeline Safety Checking}\label{safety-checking}
 
 The refactoring carries out some simple safety checks. If the loop
 body contains a \texttt{return}, \texttt{break}, \texttt{continue},
@@ -543,114 +562,114 @@ These checks are not exhaustive and addressing other potential problems is a top
 %other concurrency problems. Work is ongoing to detect these problems
 %automatically, but is not yet complete.
 
-\subsection{While loops}\label{while-loops}
-
-Given a general \texttt{while} loop it can be
-difficult to decide whether it processes a sequence of items in a manner
-suitable for pipelining: for example, the input to one iteration may be
-the output of the previous iteration (as would happen in many types of
-simulation, where each iteration of a loop represents the evolution of
-some system over a single timestep), and this dependence makes the loop
-unsuitable for pipelining. However, we have identified a number of
-commonly-occurring patterns which are plausible candidates for
-pipelining and which the tool will refactor.
-% 
-\begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
-%\tightlist
-\item
-  \lstinline[mathescape]|while (x=e) {$\dots$}|
-\item
-  \lstinline[mathescape]|while ((x=e1)  op e2) {$\dots$}|
-\item
-  \lstinline[mathescape]|while (obj >> x) {$\dots$}|
-\end{enumerate}
-
-% \begin{itemize}
-% \item 
-\noindent
-In case 1, we assume that \texttt{x} is being given a new value by some
-expression \texttt{e} which presumably performs some side-effect;
-% for example \texttt{while\ (x=*p++)\ ...}.
-For example, the loop,
-% 
-\begin{lstlisting}[mathescape]
-while (x=*p++) {
-    #pragma grppi farm stage 4
-    $\dots$
-}
-\end{lstlisting}
-% 
-\noindent
-is transformed into:
-% 
-\begin{lstlisting}[mathescape]
-parallel_execution_native pipe { };
-
-pipeline(pipe,
-    [&] () -> std::experimental::optional<int> {
-    	x=*ptr++;
-    	if (x) return x;
-    	else return {};
-    },
-    farm(4, [&](int x) {
-        $\dots$
-    }),
-    $\dots$);
-\end{lstlisting}
-% 
-% \item 
-Case 2 extends Case 1, where we again assume that \texttt{x} is being supplied with new
-values by \texttt{e1}, but the value is being compared with e2 using some
-binary operator \texttt{op}. Here, the additional binary operation is reflected in the \texttt{if} within the source lambda of the introduced pipeline. For example, given the condition \lstinline|(x=*ptr++) != nullptr| in the \texttt{while} loop, the refactoring generates the source lambda:
-% 
-\begin{lstlisting}[mathescape]
-[&] () -> std::experimental::optional<int> {
-	x=*ptr++;
-	if (x != nullptr) return x;
-	else return {};
-},
-\end{lstlisting}
-
-% for example
-% \texttt{while\ ((x=getc(stream))\ \textgreater{}=\ 0)\ ...} For example,
-% \begin{lstlisting}
-% EXAMPLE
-% \end{lstlisting}
-% 
-% \item 
-Similarly, in case 3, we assume that the \texttt{>>}
-operator is supplying new values from a stream or some other type of
-object. This allows us to handle common idioms such as
-\begin{lstlisting}[mathescape]
-while (std::cin >> x) {
-    $\dots$
-}
-\end{lstlisting}
-% For example, the simple \texttt{while} loop,
-% \begin{lstlisting}
-% while (std::cin >> x) {
-%     #pragma grppi farm stage 4
-%     xs.push_back(w(acc, x));
-%     #pragma grppi seq stage
-%     cout << xs.pop_front() << endl;
-% }
-% \end{lstlisting}
-% 
-\noindent
-which is transformed into
-% 
-\begin{lstlisting}[mathescape]
-parallel_execution_native pipe { };
-
-pipeline(pipe,
-	[&] () -> std::experimental::optional<int> {
-		std::cin >> x;
-		if (std::cin) return x;
-		else return {};
-	},
-	$\dots$);
-\end{lstlisting}
+%\subsection{While loops}\label{while-loops}
+%
+%Given a general \texttt{while} loop it can be
+%difficult to decide whether it processes a sequence of items in a manner
+%suitable for pipelining: for example, the input to one iteration may be
+%the output of the previous iteration (as would happen in many types of
+%simulation, where each iteration of a loop represents the evolution of
+%some system over a single timestep), and this dependence makes the loop
+%unsuitable for pipelining. However, we have identified a number of
+%commonly-occurring patterns which are plausible candidates for
+%pipelining and which the tool will refactor.
+%% 
+%\begin{enumerate}
+%\def\labelenumi{\arabic{enumi}.}
+%%\tightlist
+%\item
+%  \lstinline[mathescape]|while (x=e) {$\dots$}|
+%\item
+%  \lstinline[mathescape]|while ((x=e1)  op e2) {$\dots$}|
+%\item
+%  \lstinline[mathescape]|while (obj >> x) {$\dots$}|
+%\end{enumerate}
+%
+%% \begin{itemize}
+%% \item 
+%\noindent
+%In case 1, we assume that \texttt{x} is being given a new value by some
+%expression \texttt{e} which presumably performs some side-effect;
+%% for example \texttt{while\ (x=*p++)\ ...}.
+%For example, the loop,
+%% 
+%\begin{lstlisting}[mathescape]
+%while (x=*p++) {
+%    #pragma grppi farm stage 4
+%    $\dots$
+%}
+%\end{lstlisting}
+%% 
+%\noindent
+%is transformed into:
+%% 
+%\begin{lstlisting}[mathescape]
+%parallel_execution_native pipe { };
+%
+%pipeline(pipe,
+%    [&] () -> std::optional<int> {
+%    	x=*ptr++;
+%    	if (x) return x;
+%    	else return {};
+%    },
+%    farm(4, [&](int x) {
+%        $\dots$
+%    }),
+%    $\dots$);
+%\end{lstlisting}
+%% 
+%% \item 
+%Case 2 extends Case 1, where we again assume that \texttt{x} is being supplied with new
+%values by \texttt{e1}, but the value is being compared with e2 using some
+%binary operator \texttt{op}. Here, the additional binary operation is reflected in the \texttt{if} within the source lambda of the introduced pipeline. For example, given the condition \lstinline|(x=*ptr++) != nullptr| in the \texttt{while} loop, the refactoring generates the source lambda:
+%% 
+%\begin{lstlisting}[mathescape]
+%[&] () -> std::optional<int> {
+%	x=*ptr++;
+%	if (x != nullptr) return x;
+%	else return {};
+%},
+%\end{lstlisting}
+%
+%% for example
+%% \texttt{while\ ((x=getc(stream))\ \textgreater{}=\ 0)\ ...} For example,
+%% \begin{lstlisting}
+%% EXAMPLE
+%% \end{lstlisting}
+%% 
+%% \item 
+%Similarly, in case 3, we assume that the \texttt{>>}
+%operator is supplying new values from a stream or some other type of
+%object. This allows us to handle common idioms such as
+%\begin{lstlisting}[mathescape]
+%while (std::cin >> x) {
+%    $\dots$
+%}
+%\end{lstlisting}
+%% For example, the simple \texttt{while} loop,
+%% \begin{lstlisting}
+%% while (std::cin >> x) {
+%%     #pragma grppi farm stage 4
+%%     xs.push_back(w(acc, x));
+%%     #pragma grppi seq stage
+%%     cout << xs.pop_front() << endl;
+%% }
+%% \end{lstlisting}
+%% 
+%\noindent
+%which is transformed into
+%% 
+%\begin{lstlisting}[mathescape]
+%parallel_execution_native pipe { };
+%
+%pipeline(pipe,
+%	[&] () -> std::optional<int> {
+%		std::cin >> x;
+%		if (std::cin) return x;
+%		else return {};
+%	},
+%	$\dots$);
+%\end{lstlisting}
 % \end{itemize}
 
 % As before, suitable pragmas should be inserted in the loop body and then
@@ -697,9 +716,13 @@ for(int i=0; i<MAX;i++){
 \end{lstlisting}
 Here, updating variable \texttt{x} is a race condition when there are many threads trying to access that variable.
 
-\item \textbf{Object state}: Updating the member fields of objects is problematic in multithreaded programming. This updates the state of the object in the threaded code. Also, the state of the object may be updated when calling overloaded operations such as \texttt{+=}.
+\item \textbf{Object state}: Updating the member fields of objects is problematic in multithreaded programming. This updates the state of the object in the threaded code. Also, the state of the object may be updated when calling overloaded operations such as \texttt{+=}. In Listing~\ref{code:object_state}, the safety checker reports a safety warning saying that there is a probable change in the state of the object \texttt{x} at Line 11.
 
-\begin{lstlisting}[label=code:filtering_generated,caption={Object State}]
+\item \textbf{Accessing pointers:} The safety checker is able to track all non-safe updates to pointers shared amongst many threads. Also, when there are many references/pointers having access to a value, modifying that value by one thread is problematic. In general, any update to a shared reference/pointer or the content of that reference (variable, pointer or function reference) can be captured (see Listing~\ref{code:aliasing}).
+
+\begin{tabular}{lll}
+\noindent\begin{minipage}{.4\columnwidth}
+\begin{lstlisting}[label=code:object_state,caption={Object State}]
 class A {
     public:
         A& operator+=(const A &x) {
@@ -715,12 +738,11 @@ class A {
     }
 }
 \end{lstlisting}    
-    
-Here, the safety checker reports a safety warning saying that there is a probable change in the state of the object \texttt{x} at Line 11.
-
-\item \textbf{Accessing pointers:} The safety checker is able to track all non-safe updates to pointers shared amongst many threads. Also, when there are many references/pointers having access to a value, modifying that value by one thread is problematic. In general, any update to a shared reference/pointer or the content of that reference (variable, pointer or function reference) can be captured.
-
-\begin{lstlisting}[label=code:filtering_generated,caption={Object State}]
+\end{minipage}
+&
+&
+\noindent\begin{minipage}{.4\columnwidth}
+\begin{lstlisting}[label=code:aliasing,caption={Aliasing}]
  int test_alias(){
         int x = 10;
         for(int i=0;i<20;i++){
@@ -730,44 +752,57 @@ Here, the safety checker reports a safety warning saying that there is a probabl
         }
     }
 \end{lstlisting}
+\end{minipage}
+\end{tabular}
 
-In this example, the pointer \texttt{p} is declared in the loop so it is local variable but it is pointing to stack-allocated variable \texttt{x} so modifying this pointer causes a race condition. using references is also incurring safety problems.
+In Listing~\ref{code:aliasing}, pointer \texttt{p} is declared in the loop so it is local variable but it is pointing to stack-allocated variable \texttt{x} so modifying this pointer causes a race condition. using references is also incurring safety problems.
 
-\item \textbf{IO/Streams:} Updating and writing to files, printing to the screen and reading in data are generally considered to be unsafe. The tool highlights any call to the iostream as being unsafe. An example is \texttt{std::cout}.
+\item \textbf{IO/Streams:} Updating and writing to files, printing to the screen and reading in data are generally considered to be unsafe. The tool highlights any call to the iostream as being unsafe. An example is \texttt{std::cout} (see Listing~\ref{code:io_streams}).
 
-\begin{lstlisting}[label=code:filtering_generated,caption={IO/Streams}]
-An example is std::cout.
-    #include <iostream>
-    const int L = 0;const int U = 20;
-    void fun_cout(){
-        for(int I = 0; I < U; I++){
-            //...
-            std::cout << I;
-            //...
-        }
+
+\item \textbf{STL containers:} In C++, there is a set of containers can be used for storing items and doing some operations. These containers have some member functions that are non-thread safe. The tool warns the user about the usage of such functions (see Listing~\ref{code:stl_containers}).
+
+\begin{tabular}{lll}
+\noindent\begin{minipage}{.4\columnwidth}
+\begin{lstlisting}[label=code:io_streams,caption={IO/Streams}]
+#include <iostream>
+const int lower = 0;const int upper = 20;
+void fun_cout(){
+    for(int i = lower; i < upper; i++){
+        //...
+        std::cout << i;
+        //...
     }
+}
 \end{lstlisting}
-
-\item \textbf{STL containers:} In C++, there is a set of containers can be used for storing items and doing some operations. These containers have some member functions that are non-thread safe. The tool warns the user about the usage of such functions.
-
-\begin{lstlisting}[label=code:filtering_generated,caption={STL Containers}]
+\end{minipage}
+&
+&
+\noindent\begin{minipage}{.4\columnwidth}
+\begin{lstlisting}[label=code:stl_containers,caption={STL Containers}]
 #include <vector>
-    void test_stl() {
-        std::vector<int> v;
-        for (int i = 0; i<10;i++) {
-            //...
-            v.push_back(i);
-            //...
-        }
+void test_stl() {
+    std::vector<int> v;
+    for (int i = 0; i<10;i++) {
+        //...
+        v.push_back(i);
+        //...
     }
+}
 \end{lstlisting}
+\end{minipage}
+\end{tabular}
 
-\item \textbf{Function calls:} When a function is called in the main loop, the safety checker still parses and capture any possible data race. If a data race is detected, the issued warning lists the stack trace stating the all function calls leading to that race case.	
+\item \textbf{Function calls:} When a function is called (see Listing~\ref{code:function_call}) in the main loop, the safety checker still parses and capture any possible data race. If a data race is detected, the issued warning lists the stack trace stating the all function calls leading to that race case. Recursive calls are also parsed (see Listing~\ref{code:recursive_call}).
+	
 \end{itemize}
 
-\begin{lstlisting}[label=code:filtering_generated,caption={Function Calls}]
+\begin{tabular}{lll}
+\noindent\begin{minipage}{.43\columnwidth}
+\begin{lstlisting}[label=code:function_call,caption={Function Calls}]
 int global = 0;
-void fun_calls(int &ref,int *pointer, int value){
+void fun_calls(int &ref,int *pointer, 
+               int value){
     global++;
     ref++;
     (*pointer)++;
@@ -780,10 +815,11 @@ int main_fun_call(){
     }
 }
 \end{lstlisting}    
-   
-Recursive calls are also parsed.
-
-\begin{lstlisting}[label=code:filtering_generated,caption={Recursive Function Calls}]
+\end{minipage}
+&
+&
+\noindent\begin{minipage}{.43\columnwidth}
+\begin{lstlisting}[label=code:recursive_call,caption={Recursive Function Calls}]
 int total;
 void sum(int n){
     if(n == 0) return;
@@ -796,6 +832,10 @@ void fun_call_recursive(){
     }
 }
 \end{lstlisting}
+\end{minipage}
+\end{tabular}
+
+
 
 \section{Related Work}
 
@@ -846,12 +886,12 @@ Similar to our approach, Dig \textit{et al.}~\cite{dig} use refactoring to intro
 \section{Evaluation}
 
 \noindent
-In this section, we present an evaluation of the refactorings to introduce GrPPI patterns into sequential code. We consider five benchmarks benchmark applications: Matrix Multiplication, Blackscholes, Ant Colony Optimisation, Image Convolution and Fluid Animation. Characteristics of these applications are given in Table~\ref{table:XX}. For each benchmark, we start from a sequential and hand-tuned parallel version, taken either from the Parsec benchmark suite (for Blackscholes and Fluid Animation) or produced manually. In the sequential version, we introduce, using refactorings described in Section~\ref{sec:XX}, GrPPI patterns, using interfaces to \emph{pthreads} (native) and TBB. We then compare the speedups obtained with the refactored versions with the speedups of the hand-tuned parallel version. All of our experiments are conducted on a server with Intel Xeon E5-2690 CPU with 28 cores, running at 2.6 Ghz with 256 GB of RAM. The operating system is Scientific Linux 6.2.
+In this section, we present an evaluation of the refactorings to introduce GrPPI patterns into sequential code. We consider three benchmarks benchmark applications: Matrix Multiplication, Ant Colony Optimisation and Image Convolution. Characteristics of these applications are given in Table~\ref{table:XX}. For each benchmark, we start from a sequential and a manually-produced parallel version based on the \emph{pthreads} library (\emph{baseline} version in the graphs below). We then use refactorings described in Section~\ref{sec:XX} to introduce GrPPI patterns, using interfaces to \emph{pthreads} and TBB (\emph{GrPPI Native} and \emph{GrPPI TBB}, respectivelly, in the graphs below). Finally, we compare the speedups obtained with the refactored versions with the speedups of the baseline parallel version. This shows both scalability of the refactored paralell version and how they compare to a good manually-produced parallel version. All of our execution experiments are conducted on a server with Intel Xeon E5-2690 CPU with 28 cores, running at 2.6 Ghz with 256 GB of RAM, with the Scientific Linux 6.2 operating system.
 
 
 \subsection{Matrix Multiplication}
 
-\noindent Matrix multiplication is one of the most commonly used simple parallel benchmarks that demonstrates the use of the \emph{farm} pattern. Listing~\ref{lst:matmult_seq} shows the sequential version of the benchmark that multiplies matrix $a$ with matrix $b$ and stores the result in $res$.
+\noindent Matrix multiplication is one of the most commonly used simple parallel benchmarks that demonstrates the use of the \emph{map} or \emph{farm} pattern. Listing~\ref{lst:matmult_seq} shows the sequential version of the benchmark that multiplies matrix $a$ with matrix $b$ and stores the result in $res$.
 
 \begin{small}
   \begin{lstlisting}[caption=Sequential Matrix Multiplication\label{lst:matmult_seq}]
@@ -860,8 +900,7 @@ double multiply_row_by_column (double **mat1, int row, double **mat2, int col)
   int k;
   double sum=0;
   for (k=0; k<dim; k++)
-    sum += mat1[row][k] * mat2[k][col];
-
+    sum += mat1[row*dim+k] * mat2[k*dim+col];
   return sum;
 }
 
@@ -869,7 +908,7 @@ double multiply_row_by_column (double **mat1, int row, double **mat2, int col)
 void multiply_row_by_matrix (double **mat1, int row, double **mat2, double **res)
 {
   for (int col=0; col<dim; col++)
-    res[row][col] = multiply_row_by_column (mat1, row, mat2, col);
+    res[row*dim+col] = multiply_row_by_column (mat1, row, mat2, col);
 
 }
 
@@ -884,11 +923,11 @@ void matrix_multiply()
 \end{small}
 
 \noindent
-We can parallelise this version by assigning a separate task/thread to each call to the \lstinline{multiply_row_by_column} function, as these calls are completely independent of each other. This would, however, create a $n \times n$ tasks/threads for multiplying two $n \times n$ matrices, making the parallelisation too fine-grained (and, indeed, infeasible if the \emph{pthreads} library is used for parallelisation). Therefore, both in our hand-tuned baseline parallelisation using \emph{pthreads} and in the GrPPI version, we parallelise only the loop in \lstinline{matrix_multiply}, assigning separate tasks for each call to the \lstinline{multiply_row_by_matrix} function. In the baseline version, shown in XX, we further use \emph{chunking} to increase granluarity, grouping multiple calls to the function into a single thread, so that we have exactly as many threads as there are, for example, cores on the multicore machine, and each of them executes a series of calls to the \lstinline{multiply_row_by_matrix} function.
+We can parallelise this version by assigning a separate task/thread to each call to the \lstinline{multiply_row_by_column} function, as these calls are completely independent of each other. This would, however, create a $n \times n$ tasks/threads for multiplying two $n \times n$ matrices, making the parallelisation too fine-grained (and, indeed, infeasible if the \emph{pthreads} library is used for parallelisation). Therefore, both in our hand-tuned baseline parallelisation using \emph{pthreads} and in the GrPPI version, we parallelise only the loop in the \lstinline{matrix_multiply} function (line 21 in the Listing~\ref{lst:matmult_seq}), assigning separate tasks for each call to the \lstinline{multiply_row_by_matrix} function. In the baseline version, shown in Listing~\ref{lst:matmult_pthreads}, we further use \emph{chunking} to increase granluarity, grouping multiple calls to the function into a single thread, so that we have exactly as many threads as there are, for example, cores on a multicore machine where the application is executed, and each of them executes a series of calls to the \lstinline{multiply_row_by_matrix} function.
 
 \begin{small}
   \begin{lstlisting}[caption=Baseline (\emph{pthreads}) Parallel Matrix Multiplication\label{lst:matmult_pthreads}]
-// This is chunked multiply_row_by_matrix function    
+// This is a chunked multiply_row_by_matrix function    
 static void * thread_func (void* arg)
 {
   input_data *input = (input_data *)arg;
@@ -929,7 +968,8 @@ void matrix_multiply()
   \end{lstlisting}  
 \end{small}
 
-Listing~\ref{lst:matmult_grppi} shows the GrPPI version of the application, obtained automatically using the GrPPI refactorings. The code below is for the native (\emph{pthreads}) parallelisation based on GrPPI but, as explained in Section XX, to derive the OpenMP or TBB version, we would just need to replace the \lstinline{parallel_execution_native} with \lstinline{parallel_execution_openmp} or \lstinline{parallel_execution_tbb}, respectivelly. This version also assigns a separate task to each call to the \lstinline{multiply_row_by_matrix} function, but it also does implicit chunking by specifying explicitly the number of workers (threads) in the farm at line 17.
+\noindent
+Listing~\ref{lst:matmult_grppi} shows the GrPPI version of the application, obtained automatically from the sequential version using the GrPPI refactorings. The code is for the native (\emph{pthreads}) parallelisation based on GrPPI but, as explained in Section~\ref{sec:XX}, to derive the OpenMP or TBB version, we would just need to replace the \lstinline{parallel_execution_native} with \lstinline{parallel_execution_openmp} or \lstinline{parallel_execution_tbb}, respectively. This assigns a separate task to each call to the \lstinline{multiply_row_by_matrix} function. If we wanted to use chunking, we would have to use the \emph{map} skeleton inside the farm.
 
 
 \begin{small}
@@ -941,22 +981,20 @@ void matrix_multiply()
   parallel_execution_native pipe { };
 
   pipeline(pipe,
-    // -------- source ---------- //
-    [&]() {
-      if (i < dim) {
-        auto _r = i;
-        i++;
-        return std::experimental::optional<int>(_r);
-      } else return std::experimental::optional<int>();
+    [i=0,max=dim]() mutable -> std::optional<int>  { // source
+      if (i < max) return i++;
+      else return {};
     },
-    // -------- stage 1 ---------- //
-    farm(n_workers, [&](int i) {
+    farm(n_workers, [&](int i) { // stage 1
       x[i] = multiply_row_by_matrix(a, i, b, res);
-      return;
     }));
 }
   \end{lstlisting}  
 \end{small}
+
+\noindent
+Figure~\ref{fig:matmult_results} shows the speedups obtained for the Baseline, GrPPI Native and GrPPI TBB versions of the code, with respect to the number of workers used in the \emph{farm} pattern of the GrPPI versions (\lstinline{n_workers} parameter in line 17 of Listing~\ref{lst:matmult_grppi}) and the number of threads used in the baseline version (\lstinline{n_threads} parameter in line 25 of Listing~\ref{lst:matmult_pthreads}). We can note that all version give very good speedups and that speedups are quite similar, with the GrPPI Native and GrPPI TBB being slightly faster than the Baseline version. However, it worth noting that the GrPPI Native and GrPPI TBB versions use one thread more than the Baseline version, because there is a separate thread assigned to the first stage of  pipeline (lines 9--15 in Listing~\ref{lst:matmult_grppi}). Therefore, speedups when the same number of threads are used would be approximately the same.
+
 
 \begin{figure}[t]
   \centering
@@ -986,12 +1024,13 @@ void matrix_multiply()
    ]
    \addplot table[x index=0,y index=1] {results/matmult_corryvreckan};
    \addplot table[x index=0,y index=2] {results/matmult_corryvreckan};
-   \legend{Baseline, GrPPI Native}
-   \label{fig:matmult_results}
+   \addplot table[x index=0,y index=3] {results/matmult_corryvreckan};
+   \legend{Baseline, GrPPI Native, GrPPI TBB}
+   %\label{fig:matmult_results}
  \end{axis} 
  \end{tikzpicture}
-%\label{fig:matmult_results}
-%\caption{Speedup results for Matrix Multiplication}
+ \caption{Speedup results for Matrix Multiplication}
+\label{fig:matmult_results}
 \end{figure}
 
 
@@ -1010,39 +1049,19 @@ the output pixels:
 \textit{out}(i,j)=\sum_{m}\sum_{n} \textit{in}(i-n,j-m)\times \textit{filt}(n,m)
 \end{equation}
 
-Results for the Image Convolution are shown in figures~\ref{convo0}, \ref{convo1}, and~\ref{convo2}, where figures~\ref{convo0} and~\ref{convo1} shows the speedups obtained from a pipeline implementation of the image convolution. Here, we have two stages of the pipeline, each a farm (denoted as a $\Delta$ in the figures). In Figure~\ref{convo0}, we show results for the refactored GrPPI native pipeline, where each dimension of the graphs shows a varying number of workers for the first pipeline stage ($\Delta_{1}$) and the the x-axis of the graph shows the increasing number of workers for the farm in the second stage ($\Delta_{2}$). Here we obtain speedups of around 13.98 for 2 $\Delta_{1}$ workers and 16 $\Delta_{2}$ workers. Figure~\ref{convo1} shows the refactored GrPPI TBB version, also pipelined in a similar way to Figure~\ref{convo0}. Here, TBB performs better, where we obtain a speedup of 21.23 for 10 $\Delta_{1}$ workers and 16 $\Delta_{2}$ workers. Finally, Figure~\ref{convo2} shows a refactored GrPPI farm version of the convolution, where all the stages are simply executed sequentially by the farm worker. In this case all the versions perform comparably, with speedups of 21.43 for the refactored GrPPI native version and 20.84 for the refactored GrPPI TBB version against 20.847 for the native TBB version.
+\noindent
+An obvious parallelisation of this algorithm is to set up a pipeline where the first stage reads images from a file and the second stage applies the filter to the read images. Each of the stages can further be farmed, so that we can read and process multiple images at the same time. An alternative parallelisation is to set up a farm, where each worker first reads an image to a file and then processes that image. The former parallelisation is better if we need to have a different number of workers in the two farms, i.e.~if reading images is notably slower than their processing, whereas the latter one is better if the two operations are of approximately the same computational cost.
+
+Speedup results for the Image Convolution are shown in Figures~\ref{convo0} (for the GrPPI Native pipeline version), \ref{convo1} (for the GrPPI TBB pipeline version) and~\ref{convo2} (for the farm version, including the baseline TBB parallelisation). In Figures~\ref{convo0} and~\ref{convo1}, each dimension of the graphs shows a varying number of workers for the farm in the first pipeline stage ($\Delta_{1}$) and the the x-axis of the graph shows the increasing number of workers for the farm in the second stage ($\Delta_{2}$). Here we obtain speedups of around 13.98 for 2 $\Delta_{1}$ workers and 16 $\Delta_{2}$ workers. We can observe good speedups of up to 13.98 for the GrPPI Native pipeline, 21.23 for the GrPPI TBB pipeline version and 21.43 for the GrPPI Native farm version. We can also observe in Figure~\ref{convo2} that the GrPPI versions perform approximately the same as the native TBB version, giving almost the same speedups. 
+%. Figure~\ref{convo1} shows the refactored GrPPI TBB version, also pipelined in a similar way to Figure~\ref{convo0}. Here, TBB performs better, where we obtain a speedup of 21.23 for 10 $\Delta_{1}$ workers and 16 $\Delta_{2}$ workers. Finally, Figure~\ref{convo2} shows a refactored GrPPI farm version of the convolution, where all the stages are simply executed sequentially by the farm worker. In this case all the versions perform comparably, with speedups of 21.43 for the refactored GrPPI native version and 20.84 for the refactored GrPPI TBB version against 20.847 for the native TBB version.
 
 \subsection{Ant Colony Optimisation}
 
-Ant Colony Optimisation (ACO)~\cite{Dorigo-aco-book} is a metaheuristic used 
-for solving NP-hard combinatorial
-optimisation problems. %, inspired by the behaviour of real ants. 
-In this paper, we apply ACO to the 
-Single Machine Total Weighted Tardiness Problem (SMTWTP) optimisation
-problem, where we are given $n$ jobs
-and each job, $i$, is characterised by its processing time, $p_i$,
-deadline, $d_i$,  and weight,
-$w_i$ (\lstinline{w} in the code below).%\footnoteremark{Miniature fonts again}
-The goal is to find the schedule
-of jobs that minimises the total weighted
-\emph{tardiness}, defined as $\sum w_i \cdot \max \{0, C_i-d_i\}$ 
-where $C_i$ is the
-completion time of the job, $i$.
-The ACO solution to the SMTWTP problem consists of a number of
-iterations, where in each iteration each ant
-independently computes a schedule, and is biased by
-a \emph{pheromone trail} (\lstinline{t} in the code below). 
-The pheromone trail is stronger along previously successful routes and 
-is defined by a matrix $\tau$, where $\tau[i,j]$ is the preference of assigning 
-job $j$ to the $i$-th place in the schedule. 
-After all the ants compute their solutions, the best solution is chosen as
-the ``running best''; the pheromone trail is updated accordingly, and
-the next iteration is started.
-The ant colony optimisation was executed with 2000 jobs and
-with 1000 ants (each ant corresponds to one task).
-Results are shown in Figure~\ref{acresults}.
-With our refactored GrPPI version, we can observe a speedup up to 23.93 for the native GrPPI version with 28 workers and a comparable speedup of 23.90
-with the GrPPI TBB version, also for 28 workers. We compare this to a native TBB version, that doesn't use GrPPI, that gives comparable speedups of 22.89. 
+Ant Colony Optimisation (ACO)~\cite{Dorigo-aco-book} is a metaheuristic used for solving NP-hard combinatorial optimisation problems. In this paper, we apply ACO to the  Single Machine Total Weighted Tardiness Problem (SMTWTP) optimisation problem, where we are given $n$ jobs and each job, $i$, is characterised by its processing time, $p_i$, deadline, $d_i$,  and weight, $w_i$. The goal is to find the schedule of jobs that minimises the total weighted \emph{tardiness}, defined as $$\sum w_i \cdot \max \{0, C_i-d_i\}$$ where $C_i$ is the completion time of the job, $i$. The ACO solution to the SMTWTP problem consists of a number of iterations, where in each iteration each ant
+independently computes a schedule, and is biased by a \emph{pheromone trail} that is stronger along previously successful routes. After all the ants have finished computing solutions in one iteration, results are gathered, the new best one is picked, the pheromone trail is updated accordingly and the next iteration starts.
+
+One of the parallelisations of this algorithm is to set up a pipeline, where in the first stage ants compute solutions, and in the second stage the new running best solutions is picked and the pheromone trail is updated. Note that the second stage is inherently sequential, but the first stage can be farmed, assigning a separate task for each ant. This is the parallelisation we used, the speedup results of which are shown in Figure~\ref{acresults}. We can observe a speedup up to 23.93 for the GrPPI Native version with 28 workers and a comparable speedup of 23.90
+with the GrPPI TBB version, also for 28 workers. We compare this to a baseline TBB parallelisation that doesn't use GrPPI and that gives comparable speedups of 22.89. The conclusions here are the same as for the previous examples: the refactored GrPPI versions give good speedup that is approximately the same as manually produced parallel versions.
 
 
 %\subsection{Railway Diagnostic System}
@@ -1068,7 +1087,7 @@ with the GrPPI TBB version, also for 28 workers. We compare this to a native TBB
 %
 %\subsubsection{Refactoring eRDM}
 %
-%Apply the GRPPI refactorings from Section~\ref{refactoring_grppi}, the outer loop of the original kernel code was parallelized by applying a pipeline with a farm-based processing stage for the bulk of the code. The generated code did not require any further refinements, it could be directly compiled and executed. Moreover, there was no need to restructure the code manually before transformation, only the pragmas have been inserted as preparation. 
+%Apply the GrPPI refactorings from Section~\ref{refactoring_grppi}, the outer loop of the original kernel code was parallelized by applying a pipeline with a farm-based processing stage for the bulk of the code. The generated code did not require any further refinements, it could be directly compiled and executed. Moreover, there was no need to restructure the code manually before transformation, only the pragmas have been inserted as preparation. 
 %
 %\paragraph{Inserting pragma statements into the original code}
 %This preparation step included inserting two pragmas into the original kernel code. These statements inform the ParaFormance plugin as to what type of structure has to be generated from the original source. The relevant code section after inserting pragmas is shown on Listing \ref{code:filtering_with_pragmas}.
@@ -1109,7 +1128,7 @@ with the GrPPI TBB version, also for 28 workers. We compare this to a native TBB
 %\end{small}
 %
 %
-%\paragraph{Refactoring using ParaFormance and GRPPI}
+%\paragraph{Refactoring using ParaFormance and GrPPI}
 %After inserting pragmas, we highlighted the outer for loop area then selected the GrPPI option of the ParaFormance menu and clicked \emph{Introduce GrPPI Pipeline}. In the configuration window everything was left default; that is, we used the Native parallelism model similarly to the manual case. Finally the code generation process was launched. The result of it is shown on Listing \ref{code:filtering_generated}.
 %
 %The generated pipeline consists of two stages. Input of the pipeline is the index of the sensor to be processed. The first stage implements a simple preparation step, it justs sets the input/output data pointers according to the sensor index. The second stage of the pipeline is a farm containing the actual processing code, which thus will be executed in parallel for the different sensors by the specified amount of worker threads.
@@ -1135,8 +1154,8 @@ with the GrPPI TBB version, also for 28 workers. We compare this to a native TBB
 %       if (rcbIdx < numberOfRCBs) {
 %          auto _r = rcbIdx;
 %          rcbIdx++;
-%          return std::experimental::optional<unsigned int>(_r);
-%          } else return std::experimental::optional<unsigned int>();
+%          return std::optional<unsigned int>(_r);
+%          } else return std::optional<unsigned int>();
 %     },
 %     // -------- stage 1 ---------- //
 %     [&](unsigned int rcbIdx) {
@@ -1387,7 +1406,7 @@ with the GrPPI TBB version, also for 28 workers. We compare this to a native TBB
    \addplot table[x index=0,y index=1] {results/convogrppitbb};
     \addplot table[x index=0,y index=1] {results/convotbbnative};
 
-   \legend{GrPPI PThreads, GrPPI TBB, Native TBB}
+   \legend{GrPPI pthreads, GrPPI TBB, Native TBB}
 \end{axis} 
  \end{tikzpicture}\label{convo2}}
   \subfigure[Speedups for Ant Colony] {
@@ -1419,7 +1438,7 @@ with the GrPPI TBB version, also for 28 workers. We compare this to a native TBB
    \addplot table[x index=0,y index=1] {results/antgrrpitbb};
    \addplot table[x index=0,y index=1] {results/ant200tbbnative};
 
-   \legend{GrPPI Pthreads, GrPPI TBB, TBB}
+   \legend{GrPPI pthreads, GrPPI TBB, TBB}
 \end{axis} 
  \end{tikzpicture}
  \label{acresults}}
@@ -1451,7 +1470,7 @@ with the GrPPI TBB version, also for 28 workers. We compare this to a native TBB
 
 
 \section{Conclusions and Future Work}
-In this paper, we presented new refactorings for C++ that transform sequential code into fully parallel equivalent implementations, using the GrPPI framework. These refactorings are implemented in the ParaFormance tool. Tagetting GrPPI allows the programmer to refactor their sequential C++ code into one parallel version that targets many different backends, such as PThreads, TBB and OpenMP, without having to be a domain expert in parallel programming, or have expertise or knowledge in any of the available parallel libraries.  Furthermore, our experiments show that our refactorings are comparable to hand-tuned native versions using TBB and PThreads.
+In this paper, we presented new refactorings for C++ that transform sequential code into fully parallel equivalent implementations, using the GrPPI framework. These refactorings are implemented in the ParaFormance tool. Tagetting GrPPI allows the programmer to refactor their sequential C++ code into one parallel version that targets many different backends, such as pthreads, TBB and OpenMP, without having to be a domain expert in parallel programming, or have expertise or knowledge in any of the available parallel libraries.  Furthermore, our experiments show that our refactorings are comparable to hand-tuned native versions using TBB and pthreads.
 
 As future work, we plan to extend our refactorings and safety checking techniques further, to support additional patterns, such as stencil, divide and conquer and reduce. We also plan to evaluate the refactorings on larger use-cases.
 
