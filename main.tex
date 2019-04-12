@@ -128,7 +128,7 @@ grestore
 \maketitle
 
 \begin{abstract}
-Generic Reusable Parallel Pattern Interface (GrPPI) is a very useful abstraction over different parallel pattern libraries, allowing the programmer to write a generic patterned code that can easily be compiled to different backends such as FastFlow, Open MP, Intel TBB and pthreads. However, rewriting code to include calls to GrPPI still involves code transformations that can be highly non-trivial, especially for programmers who are not experts in parallelism. This paper describes \emph{software refactorings} to semi-automatically introduce instances of GrPPI patterns into sequential code, as well as \emph{safety checking} static analysis mechanisms that verify that introducing patterns into the code does not introduce concurrency-related bugs such as race conditions. We demonstrate the refactorings and safety-checking mechanisms on three simple benchmarks, showing that we are able to obtain, with little effort, GrPPI-based parallel versions that accomplish good speedups (similar to those of manually-produced parallel versions) using different pattern backends.
+Generic Reusable Parallel Pattern Interface (GrPPI) is a very useful abstraction over different parallel pattern libraries, allowing the programmer to write a generic patterned code that can easily be compiled to different backends such as FastFlow, Open MP, Intel TBB and pthreads. However, rewriting legacy code to use GrPPI still involves code transformations that can be highly non-trivial, especially for programmers who are not experts in parallelism. This paper describes \emph{software refactorings} to semi-automatically introduce instances of GrPPI patterns into sequential C++ code, as well as \emph{safety checking} static analysis mechanisms that verify that introducing patterns into the code does not introduce concurrency-related bugs such as race conditions. We demonstrate the refactorings and safety-checking mechanisms on three simple benchmarks, showing that we are able to obtain, with little effort, GrPPI-based parallel versions that accomplish good speedups (similar to those of manually-produced parallel versions) using different pattern backends.
 \keywords{Refactoring \and Parallelism \and Parallel Patterns \and TBB \and C++ \and GrPPI \and pthreads}
 % \PACS{PACS code1 \and PACS code2 \and more}
 % \subclass{MSC code1 \and MSC code2 \and more}
@@ -138,7 +138,7 @@ Generic Reusable Parallel Pattern Interface (GrPPI) is a very useful abstraction
 \label{intro}
 
 \noindent
-The scale of parallelism in modern hardware systems is increasing at a very fast rate, with 72-core systems available off-the-shelf even in the embedded market\footnote{\url{http://www.mellanox.com/page/products_dyn?product_family=238&mtag=tile_gx72}}. At the same time, such systems are becoming increasingly heterogeneous, integrating GPUs, FPGAs, DSLs and other specialised processors within the same chip. This large scale of parallelism and heterogeneity of systems makes programming modern parallel hardware very difficult, often requiring a combination of different (and usually complex) programming models (e.g.~POSIX threads for the central multicore processor and OpenCL for GPUs), coupled with careful manual tuning, to achieve good performance. 
+The scale of parallelism in modern hardware systems is increasing at a very fast rate, with 72-core systems available off-the-shelf even in the embedded market\footnote{\url{http://www.mellanox.com/page/products_dyn?product_family=238&mtag=tile_gx72}}. At the same time, such systems are becoming increasingly heterogeneous, integrating GPUs, FPGAs, DSLs and other specialised processors within the same chip. Large scale of parallelism and heterogeneity of systems make programming modern parallel hardware very difficult, often requiring a combination of different (and usually complex) programming models (e.g.~POSIX threads for the central multicore processor and OpenCL for GPUs), coupled with careful manual tuning, to achieve good performance. 
 
 Parallel patterns~\cite{Asanovic:2009:VPC} have been recognised as an excellent compromise between the ease of programming and the ability to generate efficient code for large-scale heterogeneous parallel architectures. They have been endorsed by several major IT companies, such as Intel~\cite{DBLP:reference/parallel/X11pz} and Microsoft~\cite{ACM:book/msoft/CampbellM11}, giving rise to a multitude of parallel pattern libraries, most of which are incompatible with one another and each of which usually has specific advantages (and disadvantages) over the others. GrPPI~\cite{DBLP:journals/concurrency/AstorgaD0G17} represents one of the first attempts at a uniform interface to parallel patterns, based on C++ template programming, that allows the generation of target code for different pattern libraries. Listings~\ref{lst:grppi-omp} and~\ref{lst:grppi-tbb} show code for a \emph{farm} pattern that targets both OpenMP and Intel TBB pattern libraries. While GrPPI makes the patterned code much easier to write, and also significantly eases rewriting of the code to use different pattern libraries, transforming sequential code to use GrPPI is still a very non-trivial task. The programmer needs to first ensure that it is \emph{safe} (in terms of unexpected side effects and race conditions) to transform the sequential code into its equivalent parallel implementation, and, secondly, to transform loops of the sequential code into calls to the appropriate patterns. 
 
@@ -195,7 +195,7 @@ The specific research contributions of this paper are:
 \begin{enumerate}
     \item Novel refactorings to introduce \emph{farm} and \emph{pipeline} parallelism, based on GrPPI interface, into sequential C++ code, implemented as part of the \emph{ParaFormance} refactoring tool-set;
     \item Novel static analysis mechanisms that ensure the sequential code is safe for the refactoring to introduce patterned parallelism;
-    \item Demonstration of the effectiveness of the refactorings and safety checking mechanisms on a number of benchmarks and real world examples, showing good speedups over the sequential code.
+    \item Demonstration of the effectiveness of the refactorings on a number of benchmarks and real world examples, showing speedups of up to 23.90 on a 24-core machine over the sequential code.
 \end{enumerate}
 
 
@@ -216,7 +216,7 @@ The specific research contributions of this paper are:
 
 
 \noindent
-\emph{Parallel patterns} are a high-level abstraction for representing classes of computations that are similar in terms of their parallel structure, but different in terms of problem-specific operations. A typical example of a parallel pattern is a \emph{parallel map}, where the same operation is applied to a set of independent inputs in parallel. Regardless of whether the actual operation is, for example, multiplying a matrix by a vector or processing a pixel of an image, the parallel structure of the computation will be the same. Parallel Patterns are typically implemented as library functions, which handle creation, synchronisation and communication between the parallel threads, while the problem-specific (often sequential) computations are provided as the pattern parameters. In this paper, we restrict ourselves to two classical parallel patterns, which we believe to be the most common. Note that the technique described in this paper can be further generalised to include the full tractable set of parallel patterns.
+\emph{Parallel patterns} are a high-level abstraction for representing classes of computations that are similar in terms of their parallel structure, but different in terms of problem-specific operations. A typical example of a parallel pattern is a \emph{parallel map}, where the same operation is applied to a set of independent inputs in parallel. Regardless of whether the actual operation is, for example, multiplying a matrix by a vector or processing a pixel of an image, the parallel structure of the computation will be the same. Parallel patterns are typically implemented as library functions, which handle creation, synchronisation and communication between the parallel threads, while the problem-specific (often sequential) computations are provided as the pattern parameters. In this paper, we restrict ourselves to two classical parallel patterns, which we believe to be the most common. Note that the technique described in this paper can be further generalised to include the full tractable set of parallel patterns.
 \begin{itemize}
     \item The farm pattern models a data parallel computation, where a single computational worker, $f$, is applied to a set of independent inputs, $x_{1}, ..., x_{n}$. The parallelism arises from applying the worker, $f$, to different input elements at the same time in parallel. 
     \item The pipeline pattern models a parallel pipeline. Here, a sequence of functions, $f_{1}, f_{2}, ..., f_{m}$ are applied, to a stream on independent inputs, $x_{1}, ..., x_{n}$. The output of $f_{i}$ becomes the input to $f_{i+1}$, so that the parallelism arises from executing $f_{i+1}(f_{i}(...f_{1}(x_{k})...))$ in parallel with $f_{i}(f_{i-1}(...f_{1}(x_{k+1})...))$. In this case the parallelism arises from executing different stages $f_{i}$ in parallel while items progress through the pipeline.
@@ -246,6 +246,7 @@ ParaFormance (\url{http://www.paraformance.com}) is a refactoring tool-suite dev
 \end{figure}
 
 \subsection{GrPPI}
+\label{sec:grppi}
 
 GrPPI~\cite{D24,DBLP:journals/concurrency/AstorgaD0G17} is a parallel pattern interface
 which uses C++ template metaprogramming to provide implementations of
@@ -260,13 +261,14 @@ switch between models.  This strategy greatly reduces the load on the programmer
 The basic GrPPI model is of a \textit{pipeline} which processes a
 stream of data items: items are produced by a \textit{source},
 processed by some intermediate components, and then disposed of by a
-\textit{sink}. The individual stages can all be executed in parallel,
-so that an item can be processed by stage number $n$ at the same time
-as the following item is being processed by stage $n-1$ (and the item
-after that by stage $n-2$, and so on): see Figure~\ref{pipeline1}.  
+\textit{sink}. The individual stages can all be executed in parallel 
+%so that an item can be processed by stage number $n$ at the same time
+%as the following item is being processed by stage $n-1$ (and the item
+%after that by stage $n-2$, and so on):
+(see Figure~\ref{pipeline1}.  
 % 
 There are various types of
-intermediate stage, some of which may themselves be carrying out
+intermediate stages, some of which may themselves be carrying out
 parallel computations internally:  
 % Pipeline stages are represented by C++
 % lambda expressions, or by GrPPI constructs containing lambda expressions,
@@ -280,8 +282,8 @@ parallel computations internally:
 \end{figure}
 
 \begin{itemize}
-\item \emph{Data sources.}  A source produces a stream of items of some type \verb|T|.
-The output of the source is in fact of type \verb|optional<T>| so
+\item \emph{Data source} produces a stream of items of some type \verb|T|.
+The output of the source is, in fact, of type \verb|optional<T>| so
 that the pipeline can tell when the input stream has
 ended.
 
@@ -291,17 +293,20 @@ ended.
 %  extension for C++17 which is not available in most current C++
 %  compilers; GrPPI provides its own implementation.}.
 
-\item \emph{Data sinks.}
-A sink takes a single item of data and disposes of it in some way, returning \verb|void|.
+\item \emph{Data sink} takes a single item of data and disposes of it in some way, returning \verb|void|.
 For example, a sink might write an item to a file, or store it in an array or vector.
 
-\item \emph{Intermediate stages.} GrPPI provides several types of intermediate stage, including:
-\begin{itemize}
-\item sequential stages, containing purely sequential code;
-\item farms, which can process multiple items in parallel;
-\item filters, which can discard items in the input stream based on some predicate; and
-\item reducers, which can amalgamate several stream items into a single item for processing by the next stage.
-\end{itemize}
+\item \emph{Intermediate stages} can be of several types, including i) \emph{sequential stages} that contain
+  purely sequential code; ii) \emph{farms} that can process multiple items in parallel; iii) \emph{filter} that can
+  discard itemps in the input stream based on some predicate; and, iv) \emph{reducers} that can amaglamate several
+  items into a single item for processing by the next stage.
+
+%\begin{itemize}
+%\item sequential stages, containing purely sequential code;
+%\item farms, which can process multiple items in parallel;
+%\item filters, which can discard items in the input stream based on some predicate; and
+%\item reducers, which can amalgamate several stream items into a single item for processing by the next stage.
+%\end{itemize}
 \end{itemize}
 
 \noindent
@@ -530,160 +535,14 @@ Variables that are declared outside the loop are captured in the lambda
 expressions \emph{by reference}, which means that the lambdas can modify
 them. This may lead to race conditions. They can also be captured \emph{by value} when no modification is needed. This option improves thread safety.
 
-\subsection{Pipeline Safety Checking}\label{safety-checking}
+\section {Safety Checking}
+\label{safety-checking}
+The refactorings produced by the ParaFormance tool should preserve the correctness of the functional semantics of the C++ program. This means that when given the same input value(s), the program should produce the same output value(s) before and after a refactoring, up to a given ordering. This is ensured by \emph{safety checking}, a fundamental feature in the ParaFormance tool. It eunsures that the code being refactored is safe for parallelisation, meaning that it is free from dependencies, side effects (such as writing to a global state) and that it does not contain code that may interfere with the parallel logic. Safety checking can identify potential problems in the code and, in some cases, offer additional refactorings to correct them before the parallelism can be introduced.
+%Safety checking does not require the application to be parallelised before proceeding and can run on sequential code. This check ensures a lack of race conditions, deadlocks and other problems that may affect safety. Moreover, this check may introduce additional refactorings to remove/repair these problems. 
+%
+Figure~\ref{fig:safety1} shows the safety checking feature integrated into ParaFormance; here, a report of safety errors is provided to the programmer, which the tool has found by analysing the source code.
+% The filename, line numbers and a detailed description are given for each safety error reported.
 
-The refactoring carries out some simple safety checks. If the loop
-body contains a \texttt{return}, \texttt{break}, \texttt{continue},
-\texttt{goto}, or \texttt{exit} a fatal error will be issued, since
-% these statements
-% will either fail to make sense inside the refactored
-% code, or could 
-can cause an iteration of the loop to terminate when later
-iterations have already begun to execute, almost certainly violating the
-intended semantics of the loop. Other problems may arise from the fact that the loop body is broken up
-into several parts with data being passed between them. 
-% 
-% \begin{itemize}
-% \item
-  For example, if a large data structure is allocated on the stack (more precisely,
-  with automatic storage duration) in one stage and used again in a
-  later stage, it will be \emph{copied} as a parameter, which could be
-  problematic if the structure is large.
-% \item
-  Another example occurs when a pointer is created to a stack-allocated variable in one stage and
-  then used in a later stage, the data to which it is pointing may have
-  changed, or the memory may be in use for something completely
-  unrelated.
-% \end{itemize}
-% 
-These checks are not exhaustive and addressing other potential problems is a topic of future work.
-
-%Ultimately the user must be careful not to introduce race conditions or
-%other concurrency problems. Work is ongoing to detect these problems
-%automatically, but is not yet complete.
-
-%\subsection{While loops}\label{while-loops}
-%
-%Given a general \texttt{while} loop it can be
-%difficult to decide whether it processes a sequence of items in a manner
-%suitable for pipelining: for example, the input to one iteration may be
-%the output of the previous iteration (as would happen in many types of
-%simulation, where each iteration of a loop represents the evolution of
-%some system over a single timestep), and this dependence makes the loop
-%unsuitable for pipelining. However, we have identified a number of
-%commonly-occurring patterns which are plausible candidates for
-%pipelining and which the tool will refactor.
-%% 
-%\begin{enumerate}
-%\def\labelenumi{\arabic{enumi}.}
-%%\tightlist
-%\item
-%  \lstinline[mathescape]|while (x=e) {$\dots$}|
-%\item
-%  \lstinline[mathescape]|while ((x=e1)  op e2) {$\dots$}|
-%\item
-%  \lstinline[mathescape]|while (obj >> x) {$\dots$}|
-%\end{enumerate}
-%
-%% \begin{itemize}
-%% \item 
-%\noindent
-%In case 1, we assume that \texttt{x} is being given a new value by some
-%expression \texttt{e} which presumably performs some side-effect;
-%% for example \texttt{while\ (x=*p++)\ ...}.
-%For example, the loop,
-%% 
-%\begin{lstlisting}[mathescape]
-%while (x=*p++) {
-%    #pragma grppi farm stage 4
-%    $\dots$
-%}
-%\end{lstlisting}
-%% 
-%\noindent
-%is transformed into:
-%% 
-%\begin{lstlisting}[mathescape]
-%parallel_execution_native pipe { };
-%
-%pipeline(pipe,
-%    [&] () -> std::optional<int> {
-%    	x=*ptr++;
-%    	if (x) return x;
-%    	else return {};
-%    },
-%    farm(4, [&](int x) {
-%        $\dots$
-%    }),
-%    $\dots$);
-%\end{lstlisting}
-%% 
-%% \item 
-%Case 2 extends Case 1, where we again assume that \texttt{x} is being supplied with new
-%values by \texttt{e1}, but the value is being compared with e2 using some
-%binary operator \texttt{op}. Here, the additional binary operation is reflected in the \texttt{if} within the source lambda of the introduced pipeline. For example, given the condition \lstinline|(x=*ptr++) != nullptr| in the \texttt{while} loop, the refactoring generates the source lambda:
-%% 
-%\begin{lstlisting}[mathescape]
-%[&] () -> std::optional<int> {
-%	x=*ptr++;
-%	if (x != nullptr) return x;
-%	else return {};
-%},
-%\end{lstlisting}
-%
-%% for example
-%% \texttt{while\ ((x=getc(stream))\ \textgreater{}=\ 0)\ ...} For example,
-%% \begin{lstlisting}
-%% EXAMPLE
-%% \end{lstlisting}
-%% 
-%% \item 
-%Similarly, in case 3, we assume that the \texttt{>>}
-%operator is supplying new values from a stream or some other type of
-%object. This allows us to handle common idioms such as
-%\begin{lstlisting}[mathescape]
-%while (std::cin >> x) {
-%    $\dots$
-%}
-%\end{lstlisting}
-%% For example, the simple \texttt{while} loop,
-%% \begin{lstlisting}
-%% while (std::cin >> x) {
-%%     #pragma grppi farm stage 4
-%%     xs.push_back(w(acc, x));
-%%     #pragma grppi seq stage
-%%     cout << xs.pop_front() << endl;
-%% }
-%% \end{lstlisting}
-%% 
-%\noindent
-%which is transformed into
-%% 
-%\begin{lstlisting}[mathescape]
-%parallel_execution_native pipe { };
-%
-%pipeline(pipe,
-%	[&] () -> std::optional<int> {
-%		std::cin >> x;
-%		if (std::cin) return x;
-%		else return {};
-%	},
-%	$\dots$);
-%\end{lstlisting}
-% \end{itemize}
-
-% As before, suitable pragmas should be inserted in the loop body and then
-% \textit{Introduce\ GrPPI\ Pipeline} selected.
-%
-%We emphasise that this feature is experimental and should be used with
-%care: it is quite possible that problems may arise which we have not
-%anticipated. Moreover, the plugin is not performing full dependency
-%analysis (although reports of race conditions on the loop variable are a
-%clear danger signal), so it is possible that the refactoring may not
-%preserve the semantics of the loop. We hope to introduce more
-%comprehensive safety checks in future versions of the tool.
-
-\section{Safety Checking}
 \begin{figure}
 \centering
 \includegraphics[scale=0.26]{figures/pf-safety-auto-dialog.png}
@@ -691,15 +550,12 @@ These checks are not exhaustive and addressing other potential problems is a top
 \label{fig:safety1}
 \end{figure}
 
-The safety check is a fundamental feature in the ParaFormance tool. Here, a static check is carried out to ensure the code being refactored is safe for parallelisation. Validity means the code is free from dependencies, side effects (such as writing to a global state), or contains code that may interfere with the parallel logic.
-%
-The refactorings produced by the ParaFormance tool should preserve the correctness of the functional semantics of the C++ program. This means that when given the same input value(s), the program should produce the same output value(s) before and after a refactoring, up to a given ordering.
-%
-Safety checking does not require the application to be parallelised before proceeding and can run on sequential code. This check ensures a lack of race conditions, deadlocks and other problems that may affect safety. Moreover, this check may introduce additional refactorings to remove/repair these problems. 
-%
-Figure~\ref{fig:safety1} shows the safety checking feature integrated into ParaFormance; here, a report of safety errors is provided to the programmer, which the tool has found by analysing the source code.
+Safety checking is able to capture and detect a wide range of cases. Some simple safety checks are performed as a part of refactoring itself. For example, when introducing a pipeline parallelism,
+the ParaFormance tool checks if the loop body contains a \texttt{return}, \texttt{break}, \texttt{continue}, \texttt{goto}, or \texttt{exit} and, if it does, usses  a fatal error, since these statements can cause an iteration of the loop to terminate when later iterations have already begun to execute, almost certainly violating the intended semantics of the loop. Other problems may arise from the fact that the loop body is broken up into several parts with data being passed between them. For example, if a large data structure is allocated on the stack (more precisely, with automatic storage duration) in one stage and used again in a later stage, it will be \emph{copied} as a parameter, which could be problematic if the structure is large. Another example occurs when a pointer is created to a stack-allocated variable in one stage and then used in a later stage, the data to which it is pointing may have changed, or the memory may be in use for something completely unrelated.
+%These checks are not exhaustive and addressing other potential problems is a topic of future work.
+Other checks that are performed on the code include:
 % The filename, line numbers and a detailed description are given for each safety error reported.
-In some cases, a suggestion of how to fix the safety issue is also given. Safety checking is able to capture and detect a wide range of cases. These cases include, \textit{inter alia}:
+%In some cases, a suggestion of how to fix the safety issue is also given. Safety checking is able to capture and detect a wide range of cases. These cases include, \textit{inter alia}:
 
 \begin{itemize}
 \item \textbf{Race conditions:} Updating global, static, or free variables causes race conditions in threaded code. Such conditions are captured by the checker with context details. Moreover, a stack trace of function calls is provided when the detected conditions are introduced inside invoked function(s).
@@ -835,58 +691,24 @@ void fun_call_recursive(){
 \end{minipage}
 \end{tabular}
 
-
-
-\section{Related Work}
-
-% In our previous work, we pioneered refactoring to introduce parallelism~\cite{rpl},where sequential code is transformed to introduce instances of parallel patterns. We have shown that this can lead to excellent speedups of the resulting code.
-
-% \begin{itemize}
-% \item Refactoring to introduce parallelism
-%     \begin{itemize}
-%     \item RPL [C++]
-%     \item Agricultural Reform [C++]
-%     \item Cost-Directed Refactoring, Paraphrasing: Generating Parallel \&c., Safe Concurrency Introduction, (\& Using Program Shaping) [Erlang]
-%     \item Stream Parallel Skeleton Optimisation (Aldinucci) [Rewrites]
-%     \item Optimisation Rules for Programming with Collective Operations (Gorlatch) [Rewrites]
-%     \item Polyhedral model
-%     \end{itemize}
-% \item GrPPI~\cite{DBLP:journals/concurrency/AstorgaD0G17} \& pattern libraries
-%     \begin{itemize}
-%     \item TBB
-%     \item Microsoft PPL
-%     \item FastFlow
-%     \item OpenMP
-%     \item Thrust (CUDA/OpenCL)
-%     \item SYCL (CUDA/OpenCL)
-%     \item RaftLib
-%     \item Fusion Embedded Skeleton Library (Matsuzaki)
-%     \item Lapedo (CPU \& GPU Mix) [Erlang]
-%     \end{itemize}
-% \end{itemize}
-
-
-Refactoring has roots in Burstall and Darlington's fold/unfold system~\cite{darlington77}, and has been applied to a wide range of applications as an approach to program transformation~\cite{mens_refactoring}, with refactoring tools a feature of popular IDEs including, \textit{i.a.}, Eclipse~\cite{EclipseWeb} and Visual Studio~\cite{VisualStudioWeb}.
-Previous work on parallelisation \textit{via} refactoring has primarily focussed on the introduction and manipulation of parallel pattern libraries in C++~\cite{brownagricultural,DBLP:conf/pdp/JanjicBMHDAG16} and Erlang~\cite{hlpp,DBLP:journals/cai/BarwellBHTB16}. Another approach
-has been the automated introduction of annotations in the form of
-C++ attributes~\cite{rio:2018}.
-
-Parallel design patterns, or algorithmic skeletons, were suggested as solution to the difficulties presented by low-level approaches~\cite{Asanovic:2009:VPC,DBLP:journals/spe/Gonzalez-VelezL10}.
-A range of pattern/skeleton implementations have been developed for a number of programming languages; these include: RPL~\cite{DBLP:conf/pdp/JanjicBMHDAG16}; Feldspar~\cite{DBLP:conf/ifl/AxelssonCSSEP10}; FastFlow~\cite{DBLP:journals/mis/JinLWY15}; Microsoft's Pattern Parallel Library~\cite{ACM:book/msoft/CampbellM11}; and Intel's Threading Building Blocks (TBB) library~\cite{DBLP:reference/parallel/X11pz}.
-Since patterns are well-defined, rewrites can be used to automatically explore the space of equivalent pattern, e.g. optimising for performance~\cite{DBLP:conf/europar/MatsuzakiKIHA04,DBLP:conf/ipps/GorlatchWL99} or generating optimised code as part of a DSL~\cite{DBLP:conf/dagstuhl/Gorlatch03}. Moreover, since patterns are architecture-agnostic, patterns have been similarly implemented for multiple architectures~\cite{DBLP:conf/cgo/HagedornSSGD18,DBLP:conf/parco/ReyesL15}.
-
-This introduces a level of specialisation, and the possibility of choice between pattern implementations. Conversely, GrPPI~\cite{DBLP:journals/concurrency/AstorgaD0G17} is capable of invoking other libraries, and is thereby able to take advantage of the specialisations that they present without potentially labourious reimplementation.
-
-
-Elsewhere, approaches to automatic parallelisation have primarily focussed on the transformation of loops. From early approaches in Fortran~\cite{DBLP:journals/cacm/Lamport74}, to more recent attempts with the polyhedral model~\cite{DBLP:conf/ppopp/AncourtI91}. Whilst fully automatic approaches simplify the parallelisation process for the programmer by removing the programmer from the process, such approaches can be very specific in both the code to which they can be applied. Conversely, programmer-in-the-loop approaches, such as refactoring, allow the programmer to employ their knowledge about both code and parallelism.
-
-Similar to our approach, Dig \textit{et al.}~\cite{dig} use refactoring to introduce parallelism in Java. However, unlike our approach Dig \textit{et al.} introduce low-level Java concurrency primitives instead of patterns. More recently,  Radoi and Dig consider data races in Java for parallelism, a key aspect of safety checking~\cite{DBLP:journals/tosem/RadoiD15}. Other safety checking aspects are covered by work on deadlock detection~\cite{DBLP:journals/tse/Corbett96}.
-
-
 \section{Evaluation}
 
 \noindent
-In this section, we present an evaluation of the refactorings to introduce GrPPI patterns into sequential code. We consider three benchmarks benchmark applications: Matrix Multiplication, Ant Colony Optimisation and Image Convolution. Characteristics of these applications are given in Table~\ref{table:XX}. For each benchmark, we start from a sequential and a manually-produced parallel version based on the \emph{pthreads} library (\emph{baseline} version in the graphs below). We then use refactorings described in Section~\ref{sec:XX} to introduce GrPPI patterns, using interfaces to \emph{pthreads} and TBB (\emph{GrPPI Native} and \emph{GrPPI TBB}, respectivelly, in the graphs below). Finally, we compare the speedups obtained with the refactored versions with the speedups of the baseline parallel version. This shows both scalability of the refactored paralell version and how they compare to a good manually-produced parallel version. All of our execution experiments are conducted on a server with Intel Xeon E5-2690 CPU with 28 cores, running at 2.6 Ghz with 256 GB of RAM, with the Scientific Linux 6.2 operating system.
+In this section, we present an evaluation of the refactorings to introduce GrPPI patterns into sequential code. We consider three benchmarks benchmark applications: Matrix Multiplication, Ant Colony Optimisation and Image Convolution. Characteristics of these applications are given in Table~\ref{fig:benchmarks}. For each benchmark, we start from a sequential and a manually-produced parallel version based on the \emph{pthreads} library (\emph{baseline} version in the graphs below). We then use refactorings described in Section~\ref{refactoring_grppi} to introduce GrPPI patterns, using interfaces to \emph{pthreads} and TBB (\emph{GrPPI Native} and \emph{GrPPI TBB}, respectivelly, in the graphs below). Finally, we compare the speedups obtained with the refactored versions with the speedups of the baseline parallel version. This shows both scalability of the refactored paralell version and how they compare to a good manually-produced parallel version. All of our execution experiments are conducted on a server with Intel Xeon E5-2690 CPU with 28 cores, running at 2.6 Ghz with 256 GB of RAM, with the Scientific Linux 6.2 operating system.
+
+\begin{table}
+\begin{tabular}{|c|c|c|}
+  \hline \hline
+  \textbf{Benchmark} & \textbf{Application Area} & \textbf{Type of Parallelism} \\
+  \hline
+  Matrix Multiplication & Computation Mathematics & Farm \\
+  Image Convolution & Image Processing & Pipeline with Farms \\
+  Ant Colony Optimisation & Evolutionary Computing & Pipeline with Farm \\
+  \hline \hline
+\end{tabular}
+\caption{Benchmarks used for evaluation}
+\label{fig:benchmarks}
+\end{table}
 
 
 \subsection{Matrix Multiplication}
@@ -895,7 +717,7 @@ In this section, we present an evaluation of the refactorings to introduce GrPPI
 
 \begin{small}
   \begin{lstlisting}[caption=Sequential Matrix Multiplication\label{lst:matmult_seq}]
-double multiply_row_by_column (double **mat1, int row, double **mat2, int col)
+double multiply_row_by_column (double *mat1, int row, double *mat2, int col)
 {
   int k;
   double sum=0;
@@ -969,9 +791,9 @@ void matrix_multiply()
 \end{small}
 
 \noindent
-Listing~\ref{lst:matmult_grppi} shows the GrPPI version of the application, obtained automatically from the sequential version using the GrPPI refactorings. The code is for the native (\emph{pthreads}) parallelisation based on GrPPI but, as explained in Section~\ref{sec:XX}, to derive the OpenMP or TBB version, we would just need to replace the \lstinline{parallel_execution_native} with \lstinline{parallel_execution_openmp} or \lstinline{parallel_execution_tbb}, respectively. This assigns a separate task to each call to the \lstinline{multiply_row_by_matrix} function. If we wanted to use chunking, we would have to use the \emph{map} skeleton inside the farm.
+Listing~\ref{lst:matmult_grppi} shows the GrPPI version of the application, obtained automatically from the sequential version using the GrPPI refactorings. The code is for the native (\emph{pthreads}) parallelisation based on GrPPI but, as explained in Section~\ref{sec:grppi}, to derive the OpenMP or TBB version, we would just need to replace the \lstinline{parallel_execution_native} with \lstinline{parallel_execution_openmp} or \lstinline{parallel_execution_tbb}, respectively. This assigns a separate task to each call to the \lstinline{multiply_row_by_matrix} function. Note that we do not use chunking in this version, as this would require use of the \emph{map} pattern which is present in GrPPI, but out of scope for this paper.
 
-
+\newpage
 \begin{small}
   \begin{lstlisting}[caption=GrPPI Matrix Multiplication\label{lst:matmult_grppi}]
 void matrix_multiply()
@@ -1406,7 +1228,7 @@ with the GrPPI TBB version, also for 28 workers. We compare this to a baseline T
    \addplot table[x index=0,y index=1] {results/convogrppitbb};
     \addplot table[x index=0,y index=1] {results/convotbbnative};
 
-   \legend{GrPPI pthreads, GrPPI TBB, Native TBB}
+   \legend{GrPPI Native, GrPPI TBB, Baseline TBB}
 \end{axis} 
  \end{tikzpicture}\label{convo2}}
   \subfigure[Speedups for Ant Colony] {
@@ -1438,7 +1260,7 @@ with the GrPPI TBB version, also for 28 workers. We compare this to a baseline T
    \addplot table[x index=0,y index=1] {results/antgrrpitbb};
    \addplot table[x index=0,y index=1] {results/ant200tbbnative};
 
-   \legend{GrPPI pthreads, GrPPI TBB, TBB}
+   \legend{GrPPI Native, GrPPI TBB, Baseline TBB}
 \end{axis} 
  \end{tikzpicture}
  \label{acresults}}
@@ -1464,15 +1286,60 @@ with the GrPPI TBB version, also for 28 workers. We compare this to a baseline T
 %	\label{fig:erdm_res_grppi_pipe_gizmo2}
 %\end{figure}
 
+\section{Related Work}
+
+% In our previous work, we pioneered refactoring to introduce parallelism~\cite{rpl},where sequential code is transformed to introduce instances of parallel patterns. We have shown that this can lead to excellent speedups of the resulting code.
+
+% \begin{itemize}
+% \item Refactoring to introduce parallelism
+%     \begin{itemize}
+%     \item RPL [C++]
+%     \item Agricultural Reform [C++]
+%     \item Cost-Directed Refactoring, Paraphrasing: Generating Parallel \&c., Safe Concurrency Introduction, (\& Using Program Shaping) [Erlang]
+%     \item Stream Parallel Skeleton Optimisation (Aldinucci) [Rewrites]
+%     \item Optimisation Rules for Programming with Collective Operations (Gorlatch) [Rewrites]
+%     \item Polyhedral model
+%     \end{itemize}
+% \item GrPPI~\cite{DBLP:journals/concurrency/AstorgaD0G17} \& pattern libraries
+%     \begin{itemize}
+%     \item TBB
+%     \item Microsoft PPL
+%     \item FastFlow
+%     \item OpenMP
+%     \item Thrust (CUDA/OpenCL)
+%     \item SYCL (CUDA/OpenCL)
+%     \item RaftLib
+%     \item Fusion Embedded Skeleton Library (Matsuzaki)
+%     \item Lapedo (CPU \& GPU Mix) [Erlang]
+%     \end{itemize}
+% \end{itemize}
+
+
+Refactoring has roots in Burstall and Darlington's fold/unfold system~\cite{darlington77}, and has been applied to a wide range of applications as an approach to program transformation~\cite{mens_refactoring}, with refactoring tools a feature of popular IDEs including, \textit{i.a.}, Eclipse~\cite{EclipseWeb} and Visual Studio~\cite{VisualStudioWeb}.
+Previous work on parallelisation \textit{via} refactoring has primarily focussed on the introduction and manipulation of parallel pattern libraries in C++~\cite{brownagricultural,DBLP:conf/pdp/JanjicBMHDAG16} and Erlang~\cite{hlpp,DBLP:journals/cai/BarwellBHTB16}. Another approach
+has been the automated introduction of annotations in the form of
+C++ attributes~\cite{rio:2018}.
+
+Parallel design patterns, or algorithmic skeletons, were suggested as solution to the difficulties presented by low-level approaches~\cite{Asanovic:2009:VPC,DBLP:journals/spe/Gonzalez-VelezL10}.
+A range of pattern/skeleton implementations have been developed for a number of programming languages; these include: RPL~\cite{DBLP:conf/pdp/JanjicBMHDAG16}; Feldspar~\cite{DBLP:conf/ifl/AxelssonCSSEP10}; FastFlow~\cite{DBLP:journals/mis/JinLWY15}; Microsoft's Pattern Parallel Library~\cite{ACM:book/msoft/CampbellM11}; and Intel's Threading Building Blocks (TBB) library~\cite{DBLP:reference/parallel/X11pz}.
+Since patterns are well-defined, rewrites can be used to automatically explore the space of equivalent pattern, e.g. optimising for performance~\cite{DBLP:conf/europar/MatsuzakiKIHA04,DBLP:conf/ipps/GorlatchWL99} or generating optimised code as part of a DSL~\cite{DBLP:conf/dagstuhl/Gorlatch03}. Moreover, since patterns are architecture-agnostic, patterns have been similarly implemented for multiple architectures~\cite{DBLP:conf/cgo/HagedornSSGD18,DBLP:conf/parco/ReyesL15}.
+
+This introduces a level of specialisation, and the possibility of choice between pattern implementations. Conversely, GrPPI~\cite{DBLP:journals/concurrency/AstorgaD0G17} is capable of invoking other libraries, and is thereby able to take advantage of the specialisations that they present without potentially labourious reimplementation.
+
+
+Elsewhere, approaches to automatic parallelisation have primarily focussed on the transformation of loops. From early approaches in Fortran~\cite{DBLP:journals/cacm/Lamport74}, to more recent attempts with the polyhedral model~\cite{DBLP:conf/ppopp/AncourtI91}. Whilst fully automatic approaches simplify the parallelisation process for the programmer by removing the programmer from the process, such approaches can be very specific in both the code to which they can be applied. Conversely, programmer-in-the-loop approaches, such as refactoring, allow the programmer to employ their knowledge about both code and parallelism.
+
+Similar to our approach, Dig \textit{et al.}~\cite{dig} use refactoring to introduce parallelism in Java. However, unlike our approach Dig \textit{et al.} introduce low-level Java concurrency primitives instead of patterns. More recently,  Radoi and Dig consider data races in Java for parallelism, a key aspect of safety checking~\cite{DBLP:journals/tosem/RadoiD15}. Other safety checking aspects are covered by work on deadlock detection~\cite{DBLP:journals/tse/Corbett96}.
+
 
 
 
 
 
 \section{Conclusions and Future Work}
-In this paper, we presented new refactorings for C++ that transform sequential code into fully parallel equivalent implementations, using the GrPPI framework. These refactorings are implemented in the ParaFormance tool. Tagetting GrPPI allows the programmer to refactor their sequential C++ code into one parallel version that targets many different backends, such as pthreads, TBB and OpenMP, without having to be a domain expert in parallel programming, or have expertise or knowledge in any of the available parallel libraries.  Furthermore, our experiments show that our refactorings are comparable to hand-tuned native versions using TBB and pthreads.
-
-As future work, we plan to extend our refactorings and safety checking techniques further, to support additional patterns, such as stencil, divide and conquer and reduce. We also plan to evaluate the refactorings on larger use-cases.
+In this paper, we presented new refactorings for C++ that transform sequential code into fully parallel equivalent implementations, using the GrPPI framework. These refactorings are implemented in the ParaFormance tool. Tagetting GrPPI allows the programmer to refactor their sequential C++ code into one parallel version that targets many different backends, such as pthreads, TBB and OpenMP, without having to be a domain expert in parallel programming, or have expertise or knowledge in any of the available parallel libraries. We also presented safety checking mechanisms that ensure the applied refactorings are correct, i.e. that they do not break the semantics of the sequential code. We also demonstrated that we are able to derive good parallel code with the refactorings, achieving speedups similar to the hand-tuned parallel versions. This shows that we are able to produce, with little programming effort, scalable and portable parallel code.
+%
+In future, we plan to extend our refactorings and safety checking techniques further, to support additional patterns, such as stencil, divide and conquer and reduce. We also plan to evaluate the refactorings on larger use-cases.
 
 %\noindent \small{\textbf{Acknowledgements} This work has been partially supported by EU FP7-ICT-2013-10 project
 %	REPARA (No. 609666) and EU H2020-ICT-2014-1 project RePhrase
